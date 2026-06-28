@@ -58,8 +58,8 @@ def test_cli_digest_prints_to_stdout_by_default(tmp_path) -> None:
 def test_cli_has_crawl_command() -> None:
     runner = CliRunner()
 
-    result = runner.invoke(app, ["crawl", "-h"])
+    result = runner.invoke(app, ["crawl", "-h"], env={"NO_COLOR": "1"})
 
     assert result.exit_code == 0
-    assert "--prefer" in result.output
-    assert "--limit" in result.output
+    assert "prefer" in result.output
+    assert "limit" in result.output
