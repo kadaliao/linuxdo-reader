@@ -63,6 +63,21 @@ Hydrate a topic discussion:
 uv run linuxdo-reader hydrate https://linux.do/t/topic/2489984
 ```
 
+Hydrate through a real browser session when normal HTTP JSON is blocked:
+
+```bash
+uv pip install playwright
+uv run playwright install chromium
+uv run linuxdo-reader hydrate 2489666 --prefer browser
+```
+
+Crawl hot topics and hydrate each topic:
+
+```bash
+uv run linuxdo-reader crawl --source top --period daily --limit 10
+uv run linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
+```
+
 Generate a cached digest:
 
 ```bash
@@ -87,7 +102,7 @@ Search cached comments:
 uv run linuxdo-reader search GLM --limit 20
 ```
 
-Use browser mode when HTTP API is blocked:
+Dump rendered browser text when HTTP API is blocked:
 
 ```bash
 uv pip install playwright
@@ -137,5 +152,7 @@ uv run linuxdo-reader digest --output outputs/linuxdo-daily.md
 
 - User API Key authorization appears disabled for normal linux.do users.
 - RSS is reliable for discovery. Topic JSON is best-effort and may be challenged.
+- `refresh` only caches topic metadata. Run `hydrate` or `crawl` to cache posts.
+- Linux.do shows "N 个帖子" for Discourse post count: it includes the main post.
 - Do not use this as a training crawler or full-site mirror.
 - The project intentionally stores only a local SQLite cache by default.

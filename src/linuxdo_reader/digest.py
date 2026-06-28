@@ -10,7 +10,7 @@ def render_topic_digest(topic: Topic, posts: list[Post]) -> str:
         f"- 链接：{topic.url}",
         f"- 分类：{topic.category or '未知'}",
         f"- 作者：{topic.author or '未知'}",
-        f"- 热度：{topic.reply_count or 0} 个帖子，{topic.participant_count or 0} 位参与者",
+        f"- 热度：{topic.reply_count or 0} 楼（含主贴），{topic.participant_count or 0} 位参与者",
         f"- 讨论区样本：{len(posts)} 条",
         "",
         "### 首帖",
@@ -21,7 +21,7 @@ def render_topic_digest(topic: Topic, posts: list[Post]) -> str:
     for post in posts[:12]:
         lines.append(f"- #{post.post_number} {post.author}: {_clip(post.text, 180)}")
     if len(posts) > 12:
-        lines.append(f"- 还有 {len(posts) - 12} 条已缓存回复未展示。")
+        lines.append(f"- 还有 {len(posts) - 12} 条已缓存楼层未展示。")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -41,8 +41,8 @@ def render_daily_digest(
                 "",
                 f"- 链接：{topic.url}",
                 f"- 分类：{topic.category or '未知'}",
-                f"- 热度：{topic.reply_count or 0} 个帖子，{topic.participant_count or 0} 位参与者",
-                f"- 已缓存评论：{len(posts)} 条，展示 {len(shown_posts)} 条",
+                f"- 热度：{topic.reply_count or 0} 楼（含主贴），{topic.participant_count or 0} 位参与者",
+                f"- 已缓存楼层：{len(posts)} 条，展示 {len(shown_posts)} 条",
                 f"- 首帖：{_clip(topic.excerpt, 240)}",
             ]
         )
@@ -51,7 +51,7 @@ def render_daily_digest(
             for post in shown_posts:
                 lines.append(f"  - #{post.post_number} {post.author}: {_clip(post.text, 120)}")
             if hidden_count:
-                lines.append(f"  - 还有 {hidden_count} 条已缓存评论未展示。")
+                lines.append(f"  - 还有 {hidden_count} 条已缓存楼层未展示。")
         lines.append("")
     return "\n".join(lines).strip() + "\n"
 

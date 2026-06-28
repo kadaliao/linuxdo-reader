@@ -36,11 +36,20 @@ def refresh_latest_topics(limit: int = 20) -> str:
 
 @mcp.tool()
 def hydrate_topic(topic: str, prefer: str = "json") -> str:
-    """Fetch and cache comments for a Linux.do topic by URL or topic id."""
+    """Fetch and cache posts for a Linux.do topic by URL or topic id."""
     with Store(_db_path()) as store:
         service = LinuxDoService(store)
         posts = service.hydrate_topic(topic, prefer=prefer)
     return f"Cached {len(posts)} posts for {topic}."
+
+
+@mcp.tool()
+def crawl_hot_topics(period: str = "daily", limit: int = 10, prefer: str = "json") -> str:
+    """Fetch hot topics and hydrate posts for each topic."""
+    with Store(_db_path()) as store:
+        service = LinuxDoService(store)
+        report = service.crawl_top(period=period, limit=limit, prefer=prefer)
+    return "\n".join(f"{topic_id}: cached {count} posts" for topic_id, count in report.items())
 
 
 @mcp.tool()

@@ -52,12 +52,34 @@ def refresh(
 def hydrate(
     ctx: typer.Context,
     topic: Annotated[str, typer.Argument(help="Topic id or linux.do topic URL.")],
-    prefer: Annotated[str, typer.Option("--prefer", help="json or rss")] = "json",
+    prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
 ) -> None:
     with Store(ctx.obj["db"]) as store:
         service = LinuxDoService(store)
         posts = service.hydrate_topic(topic, prefer=prefer)
     typer.echo(f"Cached {len(posts)} posts.")
+
+
+@app.command("crawl")
+def crawl(
+    ctx: typer.Context,
+    source: Annotated[str, typer.Option("--source", help="top or latest")] = "top",
+    period: Annotated[str, typer.Option("--period", help="Top period")] = "daily",
+    limit: Annotated[int, typer.Option("--limit", min=1, max=50)] = 10,
+    prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
+) -> None:
+    with Store(ctx.obj["db"]) as store:
+        service = LinuxDoService(store)
+        if source == "latest":
+            topics = service.refresh_latest(limit=limit)
+            report = {
+                topic.topic_id: len(service.hydrate_topic(topic.topic_id, prefer=prefer))
+                for topic in topics
+            }
+        else:
+            report = service.crawl_top(period=period, limit=limit, prefer=prefer)
+    for topic_id, count in report.items():
+        typer.echo(f"{topic_id}: cached {count} posts")
 
 
 @app.command("digest")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -12,9 +13,15 @@ from .storage import Store
 
 
 class LinuxDoService:
-    def __init__(self, store: Store, client: LinuxDoClient | None = None) -> None:
+    def __init__(
+        self,
+        store: Store,
+        client: LinuxDoClient | None = None,
+        browser_fetcher: Callable[[int], list[Post]] | None = None,
+    ) -> None:
         self.store = store
         self.client = client or LinuxDoClient()
+        self.browser_fetcher = browser_fetcher
 
     def refresh_top(self, period: str = "daily", limit: int = 20) -> list[Topic]:
         topics = self.client.fetch_top(period=period)[:limit]
@@ -29,7 +36,9 @@ class LinuxDoService:
     def hydrate_topic(self, topic: int | str, prefer: str = "json") -> list[Post]:
         topic_id = _coerce_topic_id(topic)
         posts: list[Post]
-        if prefer == "rss":
+        if prefer == "browser":
+            posts = self._fetch_topic_browser(topic_id)
+        elif prefer == "rss":
             posts = self.client.fetch_topic_rss(topic_id)
         else:
             try:
@@ -72,6 +81,34 @@ class LinuxDoService:
 
     def parse_topics_for_tests(self, rss_text: str) -> list[Topic]:
         return parse_topic_list_feed(rss_text, source="sample")
+
+    def crawl_top(self, period: str = "daily", limit: int = 10, prefer: str = "json") -> dict[int, int]:
+        topics = self.refresh_top(period=period, limit=limit)
+        report: dict[int, int] = {}
+        for topic in topics:
+            posts = self.hydrate_topic(topic.topic_id, prefer=prefer)
+            report[topic.topic_id] = len(posts)
+        return report
+
+    def make_post_for_tests(self, topic_id: int, post_number: int, text: str) -> Post:
+        return Post(
+            topic_id=topic_id,
+            post_id=f"{topic_id}-{post_number}",
+            post_number=post_number,
+            author="test",
+            text=text,
+            cooked=text,
+            url=f"https://linux.do/t/topic/{topic_id}/{post_number}",
+            created_at="",
+            source="test",
+        )
+
+    def _fetch_topic_browser(self, topic_id: int) -> list[Post]:
+        if self.browser_fetcher:
+            return self.browser_fetcher(topic_id)
+        from .browser import fetch_topic_posts_with_browser
+
+        return fetch_topic_posts_with_browser(topic_id)
 
 
 def _coerce_topic_id(topic: int | str) -> int:

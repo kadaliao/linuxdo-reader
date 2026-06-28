@@ -55,7 +55,7 @@ class LinuxDoClient:
         topic_json = topic_response.json()
         post_stream = topic_json.get("post_stream", {})
         stream = [int(post_id) for post_id in post_stream.get("stream", [])]
-        posts = [_post_from_json(topic_id, item) for item in post_stream.get("posts", [])]
+        posts = posts_from_json(topic_id, post_stream.get("posts", []), source="json")
         seen_ids = {post.post_id for post in posts}
         remaining = [post_id for post_id in stream if str(post_id) not in seen_ids]
         for chunk in _chunks(remaining, chunk_size):
@@ -63,14 +63,22 @@ class LinuxDoClient:
             response = self._client.get(f"/t/{topic_id}/posts.json", params=params)
             response.raise_for_status()
             for item in response.json().get("post_stream", {}).get("posts", []):
-                post = _post_from_json(topic_id, item)
+                post = _post_from_json(topic_id, item, source="json")
                 if post.post_id not in seen_ids:
                     posts.append(post)
                     seen_ids.add(post.post_id)
         return sorted(posts, key=lambda post: post.post_number)
 
 
-def _post_from_json(topic_id: int, item: dict[str, object]) -> Post:
+def posts_from_json(topic_id: int, items: list[object], source: str) -> list[Post]:
+    return [
+        _post_from_json(topic_id, item, source=source)
+        for item in items
+        if isinstance(item, dict)
+    ]
+
+
+def _post_from_json(topic_id: int, item: dict[str, object], source: str) -> Post:
     post_id = str(item.get("id", ""))
     post_number = int(item.get("post_number", 0))
     post_url = str(item.get("post_url") or "")
@@ -87,7 +95,7 @@ def _post_from_json(topic_id: int, item: dict[str, object]) -> Post:
         cooked=cooked,
         url=url,
         created_at=str(item.get("created_at") or ""),
-        source="json",
+        source=source,
     )
 
 

@@ -44,6 +44,38 @@ def test_service_hydrate_topic_falls_back_to_rss(tmp_path) -> None:
     assert len(store.list_posts(2489984)) == 2
 
 
+def test_service_hydrate_topic_can_use_browser_fetcher(tmp_path) -> None:
+    store = Store(tmp_path / "linuxdo.sqlite")
+    service = LinuxDoService(
+        store=store,
+        browser_fetcher=lambda topic_id: [
+            service.make_post_for_tests(topic_id, 1, "首帖"),
+            service.make_post_for_tests(topic_id, 2, "第一条回复"),
+        ],
+    )
+
+    posts = service.hydrate_topic(2489666, prefer="browser")
+
+    assert [post.post_number for post in posts] == [1, 2]
+    assert len(store.list_posts(2489666)) == 2
+
+
+@respx.mock
+def test_service_crawl_top_hydrates_each_refreshed_topic(tmp_path) -> None:
+    respx.get("https://linux.do/top.rss").mock(return_value=httpx.Response(200, text=LATEST_RSS))
+    store = Store(tmp_path / "linuxdo.sqlite")
+    service = LinuxDoService(
+        store=store,
+        browser_fetcher=lambda topic_id: [service.make_post_for_tests(topic_id, 1, "楼层")],
+    )
+
+    report = service.crawl_top(period="daily", limit=2, prefer="browser")
+
+    assert report == {2491173: 1, 2489984: 1}
+    assert len(store.list_posts(2491173)) == 1
+    assert len(store.list_posts(2489984)) == 1
+
+
 def test_service_renders_digest_from_cache(tmp_path) -> None:
     store = Store(tmp_path / "linuxdo.sqlite")
     service = LinuxDoService(store=store)
