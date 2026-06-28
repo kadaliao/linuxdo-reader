@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "linuxdo-agent": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/<owner>/linuxdo-agent",
+        "linuxdo-agent-mcp"
+      ],
+      "env": {
+        "LINUXDO_AGENT_DB": "/Users/you/.local/share/linuxdo-agent/linuxdo.sqlite"
+      }
+    }
+  }
+}
