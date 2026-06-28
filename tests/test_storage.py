@@ -1,5 +1,5 @@
-from linuxdo_agent.models import Post, Topic
-from linuxdo_agent.storage import Store
+from linuxdo_reader.models import Post, Topic
+from linuxdo_reader.storage import Store
 
 
 def test_store_upserts_topics_and_posts_without_duplicates(tmp_path) -> None:

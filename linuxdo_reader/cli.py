@@ -8,11 +8,11 @@ import typer
 from .service import LinuxDoService
 from .storage import Store
 
-app = typer.Typer(help="Agent-friendly Linux.do hot topics and discussion cache.")
+app = typer.Typer(help="Linux.do topic and comment reader with local cache.")
 
 
 def default_db_path() -> Path:
-    return Path.home() / ".local" / "share" / "linuxdo-agent" / "linuxdo.sqlite"
+    return Path.home() / ".local" / "share" / "linuxdo-reader" / "linuxdo.sqlite"
 
 
 @app.callback()

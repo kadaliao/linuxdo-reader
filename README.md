@@ -1,8 +1,8 @@
-# linuxdo-agent
+# linuxdo-reader
 
-Agent-friendly Linux.do hot-topic and discussion cache.
+Linux.do topic and comment reader with local cache.
 
-`linuxdo-agent` helps an agent answer questions like:
+`linuxdo-reader` helps people and automations answer questions like:
 
 - "今天 linux.do 热点在聊什么？"
 - "这个帖子评论区主要站哪几派？"
@@ -33,7 +33,7 @@ and keep search local.
 ## Install
 
 ```bash
-uv tool install git+https://github.com/<owner>/linuxdo-agent
+uv tool install git+https://github.com/<owner>/linuxdo-reader
 ```
 
 For local development:
@@ -48,31 +48,31 @@ uv run pytest
 Refresh hot topics:
 
 ```bash
-uv run linuxdo-agent refresh --source top --period daily --limit 20
+uv run linuxdo-reader refresh --source top --period daily --limit 20
 ```
 
 Refresh latest topics:
 
 ```bash
-uv run linuxdo-agent refresh --source latest --limit 20
+uv run linuxdo-reader refresh --source latest --limit 20
 ```
 
 Hydrate a topic discussion:
 
 ```bash
-uv run linuxdo-agent hydrate https://linux.do/t/topic/2489984
+uv run linuxdo-reader hydrate https://linux.do/t/topic/2489984
 ```
 
 Generate a cached digest:
 
 ```bash
-uv run linuxdo-agent digest --limit 10 --output outputs/linuxdo-digest.md
+uv run linuxdo-reader digest --limit 10 --output outputs/linuxdo-digest.md
 ```
 
 Search cached comments:
 
 ```bash
-uv run linuxdo-agent search GLM --limit 20
+uv run linuxdo-reader search GLM --limit 20
 ```
 
 Use browser mode when HTTP API is blocked:
@@ -80,7 +80,7 @@ Use browser mode when HTTP API is blocked:
 ```bash
 uv pip install playwright
 uv run playwright install chromium
-uv run linuxdo-agent browser-dump https://linux.do/t/topic/2489984 --output outputs/topic.txt
+uv run linuxdo-reader browser-dump https://linux.do/t/topic/2489984 --output outputs/topic.txt
 ```
 
 ## MCP
@@ -88,13 +88,13 @@ uv run linuxdo-agent browser-dump https://linux.do/t/topic/2489984 --output outp
 Run the MCP server:
 
 ```bash
-uv run linuxdo-agent-mcp
+uv run linuxdo-reader-mcp
 ```
 
 Optional cache path:
 
 ```bash
-LINUXDO_AGENT_DB=/path/to/linuxdo.sqlite uv run linuxdo-agent-mcp
+LINUXDO_READER_DB=/path/to/linuxdo.sqlite uv run linuxdo-reader-mcp
 ```
 
 Tools exposed:
@@ -110,13 +110,13 @@ For a client config example, see `docs/mcp-config.example.json`.
 
 ## Automation
 
-Run a light background refresh every hour, then ask your agent for summaries from
-the local cache:
+Run a light background refresh every hour, then ask any local tool or assistant
+for summaries from the local cache:
 
 ```bash
-uv run linuxdo-agent refresh --source top --period daily --limit 20
-uv run linuxdo-agent hydrate 2489984
-uv run linuxdo-agent digest --output outputs/linuxdo-daily.md
+uv run linuxdo-reader refresh --source top --period daily --limit 20
+uv run linuxdo-reader hydrate 2489984
+uv run linuxdo-reader digest --output outputs/linuxdo-daily.md
 ```
 
 ## Notes

@@ -309,7 +309,7 @@ wheels = [
 ]
 
 [[package]]
-name = "linuxdo-agent"
+name = "linuxdo-reader"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

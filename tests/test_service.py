@@ -1,8 +1,8 @@
 import httpx
 import respx
 
-from linuxdo_agent.service import LinuxDoService
-from linuxdo_agent.storage import Store
+from linuxdo_reader.service import LinuxDoService
+from linuxdo_reader.storage import Store
 
 from .fixtures import LATEST_RSS, POSTS_JSON, TOPIC_JSON, TOPIC_RSS
 

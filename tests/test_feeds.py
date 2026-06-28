@@ -1,4 +1,4 @@
-from linuxdo_agent.feeds import parse_topic_feed, parse_topic_list_feed
+from linuxdo_reader.feeds import parse_topic_feed, parse_topic_list_feed
 
 from .fixtures import LATEST_RSS, TOPIC_RSS
 

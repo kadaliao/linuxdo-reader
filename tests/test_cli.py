@@ -2,7 +2,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from linuxdo_agent.cli import app
+from linuxdo_reader.cli import app
 
 
 def test_cli_digest_reads_cache(tmp_path) -> None:

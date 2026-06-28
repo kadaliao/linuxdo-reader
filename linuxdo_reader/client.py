@@ -13,7 +13,7 @@ class LinuxDoClient:
         self,
         base_url: str = "https://linux.do",
         timeout: float = 20.0,
-        user_agent: str = "Mozilla/5.0 linuxdo-agent/0.1",
+        user_agent: str = "Mozilla/5.0 linuxdo-reader/0.1",
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(

@@ -1,14 +1,14 @@
 {
   "mcpServers": {
-    "linuxdo-agent": {
+    "linuxdo-reader": {
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/<owner>/linuxdo-agent",
-        "linuxdo-agent-mcp"
+        "git+https://github.com/<owner>/linuxdo-reader",
+        "linuxdo-reader-mcp"
       ],
       "env": {
-        "LINUXDO_AGENT_DB": "/Users/you/.local/share/linuxdo-agent/linuxdo.sqlite"
+        "LINUXDO_READER_DB": "/Users/you/.local/share/linuxdo-reader/linuxdo.sqlite"
       }
     }
   }

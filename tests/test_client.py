@@ -1,7 +1,7 @@
 import httpx
 import respx
 
-from linuxdo_agent.client import LinuxDoClient
+from linuxdo_reader.client import LinuxDoClient
 
 from .fixtures import POSTS_JSON, TOPIC_JSON
 

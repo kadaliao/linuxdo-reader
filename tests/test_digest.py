@@ -1,5 +1,5 @@
-from linuxdo_agent.digest import render_topic_digest
-from linuxdo_agent.models import Post, Topic
+from linuxdo_reader.digest import render_topic_digest
+from linuxdo_reader.models import Post, Topic
 
 
 def test_render_topic_digest_groups_discussion_signals() -> None:

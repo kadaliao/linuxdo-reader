@@ -1,7 +1,7 @@
 [project]
-name = "linuxdo-agent"
+name = "linuxdo-reader"
 version = "0.1.0"
-description = "Agent-friendly Linux.do hot topics and discussion summarizer"
+description = "Linux.do topic and comment reader with local cache"
 readme = "README.md"
 authors = [
     { name = "Kada Liao", email = "kadaliao@gmail.com" }
@@ -24,12 +24,12 @@ dev = [
 testpaths = ["tests"]
 
 [project.scripts]
-linuxdo-agent = "linuxdo_agent.cli:app"
-linuxdo-agent-mcp = "linuxdo_agent.mcp_server:main"
+linuxdo-reader = "linuxdo_reader.cli:app"
+linuxdo-reader-mcp = "linuxdo_reader.mcp_server:main"
 
 [build-system]
 requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["linuxdo_agent"]
+packages = ["linuxdo_reader"]

@@ -9,11 +9,11 @@ from .cli import default_db_path
 from .service import LinuxDoService
 from .storage import Store
 
-mcp = FastMCP("linuxdo-agent")
+mcp = FastMCP("linuxdo-reader")
 
 
 def _db_path() -> Path:
-    return Path(os.environ.get("LINUXDO_AGENT_DB", default_db_path()))
+    return Path(os.environ.get("LINUXDO_READER_DB", default_db_path()))
 
 
 @mcp.tool()

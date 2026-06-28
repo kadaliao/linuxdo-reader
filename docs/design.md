@@ -1,9 +1,9 @@
-# linuxdo-agent Design
+# linuxdo-reader Design
 
 ## Goal
 
-Build a local tool that lets an agent summarize Linux.do daily hot topics and the
-discussion below each topic without manually opening every thread.
+Build a local tool for reading Linux.do daily hot topics and the discussion below
+each topic without manually opening every thread.
 
 ## Architecture
 
@@ -17,13 +17,13 @@ discussion below each topic without manually opening every thread.
 
 ## Components
 
-- `linuxdo_agent.client`: HTTP access to RSS, topic JSON, and topic RSS.
-- `linuxdo_agent.feeds`: RSS parsing and HTML-to-text cleanup.
-- `linuxdo_agent.storage`: SQLite schema and query methods.
-- `linuxdo_agent.service`: orchestration layer shared by CLI and MCP.
-- `linuxdo_agent.cli`: command-line interface for refresh, hydrate, digest, and
+- `linuxdo_reader.client`: HTTP access to RSS, topic JSON, and topic RSS.
+- `linuxdo_reader.feeds`: RSS parsing and HTML-to-text cleanup.
+- `linuxdo_reader.storage`: SQLite schema and query methods.
+- `linuxdo_reader.service`: orchestration layer shared by CLI and MCP.
+- `linuxdo_reader.cli`: command-line interface for refresh, hydrate, digest, and
   browser dump.
-- `linuxdo_agent.mcp_server`: agent-facing MCP tools.
+- `linuxdo_reader.mcp_server`: MCP tools for readers and automations.
 
 ## Data Flow
 
