@@ -33,3 +33,23 @@ def test_cli_digest_reads_cache(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert Path(output_path).read_text(encoding="utf-8").startswith("# Linux.do 热点摘要")
+
+
+def test_cli_accepts_short_help_flag() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["-h"])
+
+    assert result.exit_code == 0
+    assert "Linux.do topic and comment reader" in result.output
+
+
+def test_cli_digest_prints_to_stdout_by_default(tmp_path) -> None:
+    db_path = tmp_path / "linuxdo.sqlite"
+    runner = CliRunner()
+    runner.invoke(app, ["--db", str(db_path), "seed-sample"])
+
+    result = runner.invoke(app, ["--db", str(db_path), "digest"])
+
+    assert result.exit_code == 0
+    assert result.output.startswith("# Linux.do 热点摘要")

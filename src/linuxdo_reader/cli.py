@@ -8,7 +8,12 @@ import typer
 from .service import LinuxDoService
 from .storage import Store
 
-app = typer.Typer(help="Linux.do topic and comment reader with local cache.")
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+
+app = typer.Typer(
+    help="Linux.do topic and comment reader with local cache.",
+    context_settings=CONTEXT_SETTINGS,
+)
 
 
 def default_db_path() -> Path:
@@ -58,12 +63,27 @@ def hydrate(
 @app.command("digest")
 def digest(
     ctx: typer.Context,
-    output: Annotated[Path | None, typer.Option("--output", "-o")] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write Markdown to a file. Omit to print to stdout."),
+    ] = None,
     limit: Annotated[int, typer.Option("--limit", min=1, max=50)] = 10,
+    comments_per_topic: Annotated[
+        int,
+        typer.Option(
+            "--comments-per-topic",
+            min=0,
+            max=100,
+            help="How many cached comments to show for each topic.",
+        ),
+    ] = 12,
 ) -> None:
     with Store(ctx.obj["db"]) as store:
         service = LinuxDoService(store)
-        rendered = service.render_daily_from_cache(limit=limit)
+        rendered = service.render_daily_from_cache(
+            limit=limit,
+            comments_per_topic=comments_per_topic,
+        )
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(rendered, encoding="utf-8")

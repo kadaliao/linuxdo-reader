@@ -66,7 +66,19 @@ uv run linuxdo-reader hydrate https://linux.do/t/topic/2489984
 Generate a cached digest:
 
 ```bash
+uv run linuxdo-reader digest --limit 10
+```
+
+Write the digest to a file:
+
+```bash
 uv run linuxdo-reader digest --limit 10 --output outputs/linuxdo-digest.md
+```
+
+Show fewer or more cached comments for each topic:
+
+```bash
+uv run linuxdo-reader digest --comments-per-topic 25
 ```
 
 Search cached comments:
@@ -82,6 +94,8 @@ uv pip install playwright
 uv run playwright install chromium
 uv run linuxdo-reader browser-dump https://linux.do/t/topic/2489984 --output outputs/topic.txt
 ```
+
+Every command accepts `-h` and `--help`.
 
 ## MCP
 

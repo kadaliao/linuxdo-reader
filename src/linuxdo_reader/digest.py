@@ -25,10 +25,16 @@ def render_topic_digest(topic: Topic, posts: list[Post]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def render_daily_digest(topics: list[Topic], posts_by_topic: dict[int, list[Post]]) -> str:
+def render_daily_digest(
+    topics: list[Topic],
+    posts_by_topic: dict[int, list[Post]],
+    comments_per_topic: int = 12,
+) -> str:
     lines = ["# Linux.do 热点摘要", ""]
     for index, topic in enumerate(topics, start=1):
         posts = posts_by_topic.get(topic.topic_id, [])
+        shown_posts = posts[:comments_per_topic]
+        hidden_count = max(len(posts) - len(shown_posts), 0)
         lines.extend(
             [
                 f"## {index}. {topic.title}",
@@ -36,14 +42,16 @@ def render_daily_digest(topics: list[Topic], posts_by_topic: dict[int, list[Post
                 f"- 链接：{topic.url}",
                 f"- 分类：{topic.category or '未知'}",
                 f"- 热度：{topic.reply_count or 0} 个帖子，{topic.participant_count or 0} 位参与者",
-                f"- 已缓存评论：{len(posts)} 条",
+                f"- 已缓存评论：{len(posts)} 条，展示 {len(shown_posts)} 条",
                 f"- 首帖：{_clip(topic.excerpt, 240)}",
             ]
         )
-        if posts:
+        if shown_posts:
             lines.append("- 讨论区：")
-            for post in posts[:5]:
+            for post in shown_posts:
                 lines.append(f"  - #{post.post_number} {post.author}: {_clip(post.text, 120)}")
+            if hidden_count:
+                lines.append(f"  - 还有 {hidden_count} 条已缓存评论未展示。")
         lines.append("")
     return "\n".join(lines).strip() + "\n"
 
