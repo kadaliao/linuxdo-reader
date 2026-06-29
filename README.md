@@ -112,7 +112,21 @@ uv run linuxdo-reader browser-dump https://linux.do/t/topic/2489984 --output out
 
 Every command accepts `-h` and `--help`.
 
+## Skill
+
+The preferred agent integration is the bundled Codex skill:
+
+```text
+skills/linuxdo-reader/SKILL.md
+```
+
+The skill teaches an agent when to run `refresh`, `hydrate`, `crawl`, `digest`,
+and when to switch to `--prefer browser`. The CLI remains the source of truth.
+
 ## MCP
+
+MCP is optional. It is useful for clients that want a tool server, but it is not
+required if an agent can run the CLI or use the bundled skill.
 
 Run the MCP server:
 
