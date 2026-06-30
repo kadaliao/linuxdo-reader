@@ -11,7 +11,7 @@ from .storage import Store
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 app = typer.Typer(
-    help="Linux.do topic and comment reader with local cache.",
+    help="Helper CLI for the Linux.do Reader skill.",
     context_settings=CONTEXT_SETTINGS,
 )
 

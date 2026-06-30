@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/<owner>/linuxdo-reader",
+        "git+https://github.com/kadaliao/linuxdo-reader",
         "linuxdo-reader-mcp"
       ],
       "env": {

@@ -2,37 +2,44 @@
 
 ## Goal
 
-Build a local tool for reading Linux.do daily hot topics and the discussion below
-each topic without manually opening every thread.
+Provide a Codex Skill for reading Linux.do hot topics and discussion floors
+without manually opening every thread. The CLI is an execution helper bundled
+with the Skill, not the primary product surface.
 
 ## Architecture
 
+- The Skill tells an agent which reading workflow to run.
+- The CLI performs deterministic fetch, cache, search, and render operations.
 - RSS discovery fetches `latest.rss` and `top.rss` to find candidate topics.
 - Topic hydration first tries Discourse JSON because it can expose full
   `post_stream.stream` and fetch posts in batches.
 - Topic RSS is a fallback because it often returns only recent replies.
-- Browser dump is optional and manual for cases where HTTP requests hit
-  Cloudflare or the user wants the exact logged-in rendered page.
-- SQLite is the durable cache. MCP tools read from or refresh this cache.
+- Browser-backed hydration is optional for cases where HTTP requests hit
+  Cloudflare or the user wants deeper thread context.
+- SQLite is the durable cache. Summaries should read from this cache.
+- MCP is optional for clients that require a tool server.
 
 ## Components
 
+- `skills/linuxdo-reader`: Codex Skill and UI metadata.
 - `linuxdo_reader.client`: HTTP access to RSS, topic JSON, and topic RSS.
 - `linuxdo_reader.feeds`: RSS parsing and HTML-to-text cleanup.
 - `linuxdo_reader.storage`: SQLite schema and query methods.
 - `linuxdo_reader.service`: orchestration layer shared by CLI and MCP.
-- `linuxdo_reader.cli`: command-line interface for refresh, hydrate, digest, and
-  browser dump.
-- `linuxdo_reader.mcp_server`: MCP tools for readers and automations.
+- `linuxdo_reader.cli`: helper command for refresh, hydrate, crawl, digest,
+  topic, search, and browser dump.
+- `linuxdo_reader.mcp_server`: optional MCP wrapper around the same service.
 
 ## Data Flow
 
-1. `refresh` stores topic metadata from RSS.
-2. `hydrate` stores topic comments from JSON or RSS fallback.
-3. `digest`, `topic`, and MCP summary tools render from local cache.
-4. `search` and `search_cache` query only local SQLite content.
+1. The Skill selects a workflow from the user request.
+2. `refresh` stores topic metadata from RSS.
+3. `hydrate` stores topic floors from JSON, RSS fallback, or browser mode.
+4. `digest`, `topic`, and MCP summary tools render from local cache.
+5. `search` and `search_cache` query only local SQLite content.
 
 ## Boundaries
 
-The tool is for personal reading and summarization. It does not attempt to bypass
-site authentication, create API keys, train models, or mirror the whole forum.
+The project is for personal reading and summarization. It does not attempt to
+bypass site authentication, create API keys, train models, or mirror the whole
+forum.

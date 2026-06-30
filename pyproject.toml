@@ -1,7 +1,7 @@
 [project]
 name = "linuxdo-reader"
 version = "0.1.0"
-description = "Linux.do topic and comment reader with local cache"
+description = "Codex Skill helper for reading Linux.do topics and discussion floors"
 readme = "README.md"
 authors = [
     { name = "Kada Liao", email = "kadaliao@gmail.com" }

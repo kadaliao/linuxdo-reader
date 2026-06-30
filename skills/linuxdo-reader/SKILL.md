@@ -1,60 +1,102 @@
 ---
 name: linuxdo-reader
-description: Use when the user asks to read, crawl, cache, summarize, or search Linux.do topics, hot posts, comments, floors, or daily discussion trends using the linuxdo-reader CLI. Trigger for questions like "today's linux.do hot topics", "summarize this linux.do thread", "why are cached comments 0", or "crawl all floors/comments".
+description: Use when the user asks an agent to read, crawl, cache, summarize, search, or digest Linux.do topics, hot posts, comments, floors, or daily discussion trends. Trigger for requests like "today's Linux.do hot topics", "summarize this Linux.do thread", "why are cached comments 0", "crawl all floors/comments", or "continue reading beyond the RSS comments".
 ---
 
 # Linux.do Reader
 
-Use the `linuxdo-reader` CLI as the source of truth. The skill is a workflow guide;
-it does not replace the CLI.
+Use this Skill as the primary interface for Linux.do reading tasks. The
+`linuxdo-reader` CLI is the helper tool this Skill drives; do not treat the CLI
+as the product.
 
-## Core Model
+## Operating Model
 
-- `refresh` caches topic metadata only. It does not cache floors/comments.
-- Linux.do/Discourse "N 个帖子" means N floors/posts including the main post.
-- `hydrate` caches floors for one topic.
-- `crawl` refreshes a topic list and hydrates each topic.
-- `digest` reads local SQLite cache and prints Markdown by default.
-- Normal JSON may be blocked by Cloudflare. Then `hydrate` falls back to topic RSS,
-  which usually returns only a recent 25-floor window.
-- Use `--prefer browser` when the user wants the most complete thread.
+- Fetch current data before summarizing current hot topics.
+- Use the local SQLite cache as the working memory for topics and floors.
+- Explain cache state clearly. `refresh` caches topic metadata only; it does not
+  cache comments/floors.
+- Use `hydrate` for one topic and `crawl` for a topic list.
+- Use `digest`, `topic`, and `search` to read from cache.
+- Treat Linux.do/Discourse "N 个帖子" as floor/post count including the main post.
+- Do not present RSS output as complete thread history on busy topics.
 
-## First Checks
+## Command Runner
 
-Run help before assuming behavior:
+Choose the command form from the environment:
 
-```bash
-uv run linuxdo-reader -h
-uv run linuxdo-reader digest -h
-```
-
-If commands cannot import the package in local development, run:
+- In a cloned `linuxdo-reader` checkout, run `uv run linuxdo-reader ...`.
+- If the helper is installed with `uv tool install`, run `linuxdo-reader ...`.
+- If no helper command is available, install it:
 
 ```bash
-uv sync --reinstall-package linuxdo-reader
+uv tool install git+https://github.com/kadaliao/linuxdo-reader
 ```
 
-On macOS only, if `.pth` files are skipped as hidden, clear the local venv flag:
+Before relying on behavior, check help:
 
 ```bash
-chflags -R nohidden .venv
+linuxdo-reader -h
+linuxdo-reader digest -h
 ```
 
-## Common Workflows
+Use `uv run linuxdo-reader -h` instead when working inside the repository.
 
-Refresh hot topic metadata:
+## Daily Digest Workflow
+
+For a normal daily summary:
 
 ```bash
-uv run linuxdo-reader refresh --source top --period daily --limit 20
+linuxdo-reader crawl --source top --period daily --limit 10
+linuxdo-reader digest --limit 10 --comments-per-topic 25
 ```
 
-Cache floors for one topic:
+For a deeper daily pass when the user wants more floor context:
 
 ```bash
-uv run linuxdo-reader hydrate 2489666
+linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
+linuxdo-reader digest --limit 10 --comments-per-topic 50
 ```
 
-Try full browser-backed hydration:
+If working inside the repository:
+
+```bash
+uv run linuxdo-reader crawl --source top --period daily --limit 10
+uv run linuxdo-reader digest --limit 10 --comments-per-topic 25
+```
+
+Summarize the digest in Chinese unless the user asks otherwise. Group by topic,
+include the thread link, and distinguish the main post from discussion floors.
+
+## One Topic Workflow
+
+Cache one thread:
+
+```bash
+linuxdo-reader hydrate 2489666
+```
+
+Render the cached thread:
+
+```bash
+linuxdo-reader topic 2489666
+```
+
+If the user gives a URL, pass the URL directly:
+
+```bash
+linuxdo-reader hydrate https://linux.do/t/topic/2489666
+```
+
+## Browser-Backed Reading
+
+Use browser-backed hydration when:
+
+- the user asks for all floors or deeper comments;
+- JSON is blocked by Cloudflare;
+- RSS only returns a recent window;
+- the digest shows fewer cached floors than the topic count implies.
+
+From a development checkout, install browser support and hydrate:
 
 ```bash
 uv pip install playwright
@@ -62,44 +104,41 @@ uv run playwright install chromium
 uv run linuxdo-reader hydrate 2489666 --prefer browser
 ```
 
-Crawl and hydrate hot topics:
+Then render:
 
 ```bash
-uv run linuxdo-reader crawl --source top --period daily --limit 10
+uv run linuxdo-reader topic 2489666
 ```
 
-Browser-backed crawl:
+If browser mode is not available, say so explicitly and summarize from the
+cached/RSS-visible floors only.
 
-```bash
-uv run linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
-```
-
-Print digest to stdout:
-
-```bash
-uv run linuxdo-reader digest --limit 10 --comments-per-topic 25
-```
-
-Write digest to a file:
-
-```bash
-uv run linuxdo-reader digest --limit 10 --output outputs/linuxdo-digest.md
-```
+## Search Workflow
 
 Search cached floors:
 
 ```bash
-uv run linuxdo-reader search GLM --limit 20
+linuxdo-reader search GLM --limit 20
 ```
 
-## Answering User Confusion
+Use search only for cached data. If the user expects current site-wide results,
+run `crawl` or `hydrate` first.
 
-If a digest says cached floors are `0`, explain that only topic metadata has been
-refreshed. Tell the user to run `hydrate <topic>` or `crawl`.
+## Interpreting Results
 
-If a topic has 134 floors but only 25 cached, explain that anonymous JSON was
-blocked and RSS only returned a recent window. Recommend `--prefer browser`.
+If cached floors are `0`, explain that only topic metadata has been refreshed.
+Run `hydrate <topic>` or `crawl`.
 
-If the user asks what MCP is for, say it is optional. The CLI is the main
-capability; this skill is the preferred agent integration because it teaches the
-agent when and how to invoke the CLI correctly.
+If a topic shows 134 floors but only 25 are cached, explain that RSS likely
+returned a recent window and anonymous JSON may have been blocked. Use
+`--prefer browser` when feasible.
+
+If the user asks what MCP is for, say MCP is optional for clients that require a
+tool server. For Codex-style use, this Skill plus the helper CLI is the main
+integration.
+
+## Safety Boundary
+
+Use this for personal reading and summarization. Do not attempt to create API
+keys, bypass authentication, mirror the whole forum, or build a training data
+crawler.

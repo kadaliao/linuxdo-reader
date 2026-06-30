@@ -1,4 +1,4 @@
 interface:
   display_name: "Linux.do Reader"
-  short_description: "Read and summarize cached Linux.do discussions"
-  default_prompt: "Use $linuxdo-reader to refresh Linux.do topics, hydrate thread floors, and produce a local digest."
+  short_description: "Skill for Linux.do hot-topic digests"
+  default_prompt: "Use $linuxdo-reader to crawl today's Linux.do hot topics, hydrate discussion floors, and produce a concise digest."

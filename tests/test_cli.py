@@ -41,7 +41,7 @@ def test_cli_accepts_short_help_flag() -> None:
     result = runner.invoke(app, ["-h"])
 
     assert result.exit_code == 0
-    assert "Linux.do topic and comment reader" in result.output
+    assert "Helper CLI for the Linux.do Reader skill" in result.output
 
 
 def test_cli_digest_prints_to_stdout_by_default(tmp_path) -> None:
