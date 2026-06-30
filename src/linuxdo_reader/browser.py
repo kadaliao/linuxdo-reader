@@ -7,6 +7,14 @@ from .client import posts_from_json
 from .feeds import canonical_topic_url, topic_id_from_url
 from .models import Post
 
+PLAYWRIGHT_INSTALL_HINT = (
+    "Browser mode requires Playwright. "
+    "If you installed linuxdo-reader as a uv tool, run "
+    "`uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force` "
+    "and then `uv tool run playwright install chromium`. "
+    "In a source checkout, run `uv pip install playwright && uv run playwright install chromium`."
+)
+
 
 def build_topic_url(topic: str) -> str:
     if topic.startswith("https://linux.do/t/"):
@@ -24,10 +32,7 @@ def fetch_topic_with_browser(topic: str, scroll_rounds: int = 12) -> str:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
-        raise RuntimeError(
-            "Browser mode requires Playwright. Install it with "
-            "`uv pip install playwright && uv run playwright install chromium`."
-        ) from exc
+        raise RuntimeError(PLAYWRIGHT_INSTALL_HINT) from exc
 
     url = build_topic_url(topic)
     with sync_playwright() as playwright:
@@ -56,10 +61,7 @@ def fetch_topic_posts_with_browser(
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
-        raise RuntimeError(
-            "Browser hydrate requires Playwright. Install it with "
-            "`uv pip install playwright && uv run playwright install chromium`."
-        ) from exc
+        raise RuntimeError(PLAYWRIGHT_INSTALL_HINT) from exc
 
     topic_id = topic_id_from_any(str(topic))
     url = build_topic_url(str(topic))

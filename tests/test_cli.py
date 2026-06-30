@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import httpx
+import respx
 from typer.testing import CliRunner
 
 from linuxdo_reader.cli import app
@@ -63,3 +65,27 @@ def test_cli_has_crawl_command() -> None:
     assert result.exit_code == 0
     assert "prefer" in result.output
     assert "limit" in result.output
+
+
+@respx.mock
+def test_cli_refresh_reports_feed_errors_without_traceback(tmp_path) -> None:
+    respx.get("https://linux.do/top.rss").mock(return_value=httpx.Response(403))
+    respx.get("https://linux.do/top/daily.rss").mock(side_effect=httpx.ConnectError("TLS EOF"))
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "--db",
+            str(tmp_path / "linuxdo.sqlite"),
+            "refresh",
+            "--source",
+            "top",
+            "--period",
+            "daily",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "All linux.do feed requests failed" in result.output
+    assert "Traceback" not in result.output

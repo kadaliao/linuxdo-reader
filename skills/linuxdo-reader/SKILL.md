@@ -104,6 +104,15 @@ uv run playwright install chromium
 uv run linuxdo-reader hydrate 2489666 --prefer browser
 ```
 
+From a `uv tool install` setup, reinstall the helper with the optional browser
+dependency and install Chromium:
+
+```bash
+uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
+uv tool run playwright install chromium
+linuxdo-reader hydrate 2489666 --prefer browser
+```
+
 Then render:
 
 ```bash
@@ -132,6 +141,12 @@ Run `hydrate <topic>` or `crawl`.
 If a topic shows 134 floors but only 25 are cached, explain that RSS likely
 returned a recent window and anonymous JSON may have been blocked. Use
 `--prefer browser` when feasible.
+
+If `refresh` or `crawl --source top` fails, note that the helper tries both
+`/top.rss?period=<period>` and `/top/<period>.rss` with a short retry. If both
+paths fail, summarize the attempted paths from the error and treat it as a
+temporary Linux.do/Cloudflare/TLS access issue; do not summarize stale cache as
+current hot topics.
 
 If the user asks what MCP is for, say MCP is optional for clients that require a
 tool server. For Codex-style use, this Skill plus the helper CLI is the main

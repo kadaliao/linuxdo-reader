@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from urllib.parse import urlencode
 
 import httpx
 
@@ -40,8 +41,10 @@ class LinuxDoClient:
         return parse_topic_list_feed(response.text, source="latest")
 
     def fetch_top(self, period: str = "daily") -> list[Topic]:
-        response = self._client.get("/top.rss", params={"period": period})
-        response.raise_for_status()
+        response = self._get_with_fallbacks(
+            ("/top.rss", {"period": period}),
+            (f"/top/{period}.rss", None),
+        )
         return parse_topic_list_feed(response.text, source=f"top:{period}")
 
     def fetch_topic_rss(self, topic_id: int) -> list[Post]:
@@ -68,6 +71,22 @@ class LinuxDoClient:
                     posts.append(post)
                     seen_ids.add(post.post_id)
         return sorted(posts, key=lambda post: post.post_number)
+
+    def _get_with_fallbacks(
+        self,
+        *requests: tuple[str, dict[str, str] | None],
+        attempts: int = 2,
+    ) -> httpx.Response:
+        errors: list[tuple[str, httpx.HTTPError]] = []
+        for path, params in requests:
+            for _ in range(attempts):
+                try:
+                    response = self._client.get(path, params=params)
+                    response.raise_for_status()
+                    return response
+                except httpx.HTTPError as exc:
+                    errors.append((_format_path(path, params), exc))
+        raise httpx.HTTPError(_format_fallback_errors(errors))
 
 
 def posts_from_json(topic_id: int, items: list[object], source: str) -> list[Post]:
@@ -102,3 +121,16 @@ def _post_from_json(topic_id: int, item: dict[str, object], source: str) -> Post
 def _chunks(values: list[int], size: int) -> Iterable[list[int]]:
     for index in range(0, len(values), size):
         yield values[index : index + size]
+
+
+def _format_path(path: str, params: dict[str, str] | None) -> str:
+    if not params:
+        return path
+    return f"{path}?{urlencode(params)}"
+
+
+def _format_fallback_errors(errors: list[tuple[str, httpx.HTTPError]]) -> str:
+    details = "; ".join(
+        f"{path}: {type(error).__name__}: {error}" for path, error in errors
+    )
+    return f"All linux.do feed requests failed. Tried {details}"

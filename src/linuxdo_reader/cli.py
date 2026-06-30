@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn, TypeVar
 
+import httpx
 import typer
 
 from .service import LinuxDoService
@@ -15,9 +17,23 @@ app = typer.Typer(
     context_settings=CONTEXT_SETTINGS,
 )
 
+T = TypeVar("T")
+
 
 def default_db_path() -> Path:
     return Path.home() / ".local" / "share" / "linuxdo-reader" / "linuxdo.sqlite"
+
+
+def _fail(message: str) -> NoReturn:
+    typer.echo(f"Error: {message}", err=True)
+    raise typer.Exit(1)
+
+
+def _run_cli(action: Callable[[], T]) -> T:
+    try:
+        return action()
+    except (httpx.HTTPError, RuntimeError) as exc:
+        _fail(str(exc))
 
 
 @app.callback()
@@ -38,13 +54,16 @@ def refresh(
     period: Annotated[str, typer.Option("--period", help="Top period")] = "daily",
     limit: Annotated[int, typer.Option("--limit", min=1, max=100)] = 20,
 ) -> None:
-    with Store(ctx.obj["db"]) as store:
-        service = LinuxDoService(store)
-        topics = (
-            service.refresh_latest(limit=limit)
-            if source == "latest"
-            else service.refresh_top(period=period, limit=limit)
-        )
+    def action() -> list:
+        with Store(ctx.obj["db"]) as store:
+            service = LinuxDoService(store)
+            return (
+                service.refresh_latest(limit=limit)
+                if source == "latest"
+                else service.refresh_top(period=period, limit=limit)
+            )
+
+    topics = _run_cli(action)
     typer.echo(f"Cached {len(topics)} topics.")
 
 
@@ -54,9 +73,12 @@ def hydrate(
     topic: Annotated[str, typer.Argument(help="Topic id or linux.do topic URL.")],
     prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
 ) -> None:
-    with Store(ctx.obj["db"]) as store:
-        service = LinuxDoService(store)
-        posts = service.hydrate_topic(topic, prefer=prefer)
+    def action() -> list:
+        with Store(ctx.obj["db"]) as store:
+            service = LinuxDoService(store)
+            return service.hydrate_topic(topic, prefer=prefer)
+
+    posts = _run_cli(action)
     typer.echo(f"Cached {len(posts)} posts.")
 
 
@@ -68,16 +90,18 @@ def crawl(
     limit: Annotated[int, typer.Option("--limit", min=1, max=50)] = 10,
     prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
 ) -> None:
-    with Store(ctx.obj["db"]) as store:
-        service = LinuxDoService(store)
-        if source == "latest":
-            topics = service.refresh_latest(limit=limit)
-            report = {
-                topic.topic_id: len(service.hydrate_topic(topic.topic_id, prefer=prefer))
-                for topic in topics
-            }
-        else:
-            report = service.crawl_top(period=period, limit=limit, prefer=prefer)
+    def action() -> dict[int, int]:
+        with Store(ctx.obj["db"]) as store:
+            service = LinuxDoService(store)
+            if source == "latest":
+                topics = service.refresh_latest(limit=limit)
+                return {
+                    topic.topic_id: len(service.hydrate_topic(topic.topic_id, prefer=prefer))
+                    for topic in topics
+                }
+            return service.crawl_top(period=period, limit=limit, prefer=prefer)
+
+    report = _run_cli(action)
     for topic_id, count in report.items():
         typer.echo(f"{topic_id}: cached {count} posts")
 
@@ -144,7 +168,7 @@ def browser_dump(
 ) -> None:
     from .browser import fetch_topic_with_browser
 
-    text = fetch_topic_with_browser(topic, scroll_rounds=scroll_rounds)
+    text = _run_cli(lambda: fetch_topic_with_browser(topic, scroll_rounds=scroll_rounds))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(text, encoding="utf-8")
     typer.echo(str(output))

@@ -124,6 +124,14 @@ uv run playwright install chromium
 uv run linuxdo-reader hydrate 2489666 --prefer browser
 ```
 
+Use browser-backed hydration from a `uv tool` install:
+
+```bash
+uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
+uv tool run playwright install chromium
+linuxdo-reader hydrate 2489666 --prefer browser
+```
+
 Search cached floors:
 
 ```bash
@@ -131,6 +139,11 @@ linuxdo-reader search GLM --limit 20
 ```
 
 Every command accepts `-h` and `--help`.
+
+If `refresh` or `crawl` cannot fetch daily top topics, the client tries both
+`/top.rss?period=daily` and `/top/daily.rss` with a short retry. If both fail,
+the error lists each attempted feed path; this usually points to a temporary
+Linux.do/Cloudflare/TLS path issue rather than an empty cache.
 
 ## Local Development
 
