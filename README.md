@@ -1,89 +1,81 @@
 # linuxdo-reader
 
-Linux.do Reader is a Codex Skill for reading Linux.do hot topics, comments, and
-daily discussion trends.
+`linuxdo-reader` 是一个面向 Codex 的 Linux.do 阅读 Skill，用来抓取、缓存并总结 Linux.do 的热门帖子、评论区和每日讨论趋势。
 
-The Skill is the product. The `linuxdo-reader` CLI is the helper underneath it:
-it fetches topic lists, hydrates discussion floors, keeps a local SQLite cache,
-refreshes your own Linux.do cookies, and renders Markdown digests for the agent
-to summarize.
+这个项目的入口是 **Codex Skill**。`linuxdo-reader` CLI 是 Skill 背后的辅助工具，负责抓帖子列表、读取楼层、维护本地 SQLite 缓存、刷新你自己的 Linux.do cookies，并把内容渲染成 Markdown digest，方便 Codex 做总结。
 
-Use it when you want to ask Codex things like:
+你可以用它问 Codex：
 
 - 今天 Linux.do 热点在聊什么？
 - 总结这个帖子的主贴和评论区分歧。
 - 抓今天热门帖子，按主题输出 digest。
 - 这个帖显示 134 楼但缓存只有 25 楼，继续往后读。
 
-## One-Command Install
+## 一行安装
 
-Install the Skill, helper CLI, and Playwright Chromium:
+安装 Skill、辅助 CLI 和 Playwright Chromium：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash
 ```
 
-Install a pinned release:
+安装指定版本：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash -s -- --version v0.1.2
 ```
 
-The installer requires `uv`. It does not require `git clone`.
+安装脚本需要本机已有 `uv`，不需要 `git clone`。
 
-If you already installed the helper CLI, you can install or update only the Skill:
+如果你已经装好了辅助 CLI，只想安装或更新 Skill：
 
 ```bash
 linuxdo-reader install-skill --force
 ```
 
-Then ask Codex:
+安装后重启 Codex，然后直接问：
 
 ```text
 Use $linuxdo-reader to crawl today's Linux.do hot topics and summarize the comment discussions.
 ```
 
-## Install From Codex
+## 在 Codex 里安装 Skill
 
-If your Codex has the built-in `skill-installer` Skill, you can also ask Codex:
+如果你的 Codex 有内置的 `skill-installer` Skill，也可以直接让 Codex 安装：
 
 ```text
 Use $skill-installer to install https://github.com/kadaliao/linuxdo-reader/tree/main/skills/linuxdo-reader
 ```
 
-That installs the Skill only. You still need the helper CLI for reading Linux.do:
+这只会安装 Skill。实际读取 Linux.do 仍然需要辅助 CLI：
 
 ```bash
 uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
 uv tool run playwright install chromium
 ```
 
-## Personal Login Cookies
+## 个人登录 Cookies
 
-Linux.do may block anonymous RSS or JSON requests with Cloudflare/Discourse
-checks. For personal reading, let the helper maintain a cookies file from your
-own browser session:
+Linux.do 可能会用 Cloudflare 或 Discourse 机制拦截匿名 RSS/JSON 请求。作为个人阅读工具，推荐让 `linuxdo-reader` 维护你自己的 Linux.do cookies 文件：
 
 ```bash
 linuxdo-reader auth refresh
 ```
 
-The first run opens a Playwright Chromium profile. Log in or complete the site
-check in that window if needed. The helper saves Linux.do cookies to:
+第一次运行会打开一个 Playwright Chromium profile。如果需要登录或过站点检查，在弹出的浏览器里手动完成即可。工具会把 Linux.do cookies 保存到：
 
 ```text
 ~/.config/linuxdo-reader/cookies.txt
 ```
 
-Normal commands automatically use this default file. You can also pass a custom
-file:
+普通命令会自动读取这个默认文件。也可以显式指定：
 
 ```bash
 linuxdo-reader auth refresh --cookies-file ~/.config/linuxdo-reader/cookies.txt
 linuxdo-reader --cookies-file ~/.config/linuxdo-reader/cookies.txt crawl --source top --period daily --limit 10 --prefer browser
 ```
 
-For automation:
+每天自动总结可以这样跑：
 
 ```bash
 linuxdo-reader auth refresh
@@ -91,105 +83,99 @@ linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
 linuxdo-reader digest --limit 10 --comments-per-topic 30
 ```
 
-Or set:
+或者设置环境变量：
 
 ```bash
 export LINUXDO_READER_COOKIES_FILE=~/.config/linuxdo-reader/cookies.txt
 ```
 
-The helper does not read Chrome or Safari cookie databases directly. It only uses
-the cookies file you explicitly configure or refresh through its own Playwright
-profile.
+工具不会直接读取 Chrome 或 Safari 的 cookies 数据库，只会使用你明确配置的 cookies 文件，或者通过自己的 Playwright profile 刷新出来的 cookies。
 
-## Skill Workflow
+## Skill 工作流
 
-The bundled Skill teaches Codex to:
+这个 Skill 会指导 Codex 按正确方式读 Linux.do：
 
-1. Fetch current Linux.do data before summarizing current topics.
-2. Use the local SQLite cache as working memory.
-3. Distinguish topic metadata from cached comments/floors.
-4. Prefer RSS/JSON when available.
-5. Use browser-backed reading with your cookies when feeds are blocked.
-6. Render summaries from cache instead of repeatedly hitting the site.
+1. 总结当前热点前，先抓取最新数据。
+2. 使用本地 SQLite 缓存作为帖子和楼层的工作记忆。
+3. 区分「只缓存了帖子元信息」和「已经缓存了评论/楼层」。
+4. RSS/JSON 能用时优先使用它们。
+5. Feed 被拦时，用带个人 cookies 的浏览器模式读取。
+6. 总结时从缓存渲染 digest，避免反复请求站点。
 
-The Skill lives here:
+Skill 文件在这里：
 
 ```text
 skills/linuxdo-reader/SKILL.md
 ```
 
-## Common Prompts
+## 常用问法
 
-Daily hot topics:
+总结今日热点：
 
 ```text
 Use $linuxdo-reader to crawl Linux.do daily hot topics, include cached discussion floors, and produce a concise Chinese digest.
 ```
 
-One thread:
+总结一个帖子：
 
 ```text
 Use $linuxdo-reader to hydrate https://linux.do/t/topic/2489666 and summarize the main post plus discussion positions.
 ```
 
-Deeper browser-backed read:
+继续深读评论区：
 
 ```text
 Use $linuxdo-reader with browser-backed hydration to continue reading this Linux.do thread beyond the RSS-visible floors.
 ```
 
-## Helper CLI
+## 辅助 CLI
 
-Humans can run the helper directly. Agents should normally follow the Skill
-instructions rather than inventing command sequences.
+人也可以直接运行辅助 CLI。Codex 通常应该按 Skill 里的说明调用，不要临时发明命令序列。
 
-Daily digest:
+生成每日 digest：
 
 ```bash
 linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
 linuxdo-reader digest --limit 10 --comments-per-topic 30
 ```
 
-Hydrate one topic:
+读取一个帖子：
 
 ```bash
 linuxdo-reader hydrate https://linux.do/t/topic/2489984 --prefer browser
 linuxdo-reader topic 2489984
 ```
 
-Search cached floors:
+搜索已缓存楼层：
 
 ```bash
 linuxdo-reader search GLM --limit 20
 ```
 
-Every command accepts `-h` and `--help`.
+所有命令都支持 `-h` 和 `--help`。
 
-## Access Model
+## 访问模型
 
-Linux.do access has practical constraints:
+Linux.do 的读取有一些现实约束：
 
-- RSS is useful for discovery when available.
-- Topic RSS may expose only a recent floor window.
-- Anonymous JSON or RSS can be blocked by Cloudflare or Discourse rate limits.
-- Browser mode is the normal fallback for personal reading.
-- If JSON fails in browser mode, the helper falls back to rendered page text so
-  the digest can still include visible discussion content.
+- RSS 可用时适合做列表发现。
+- 单帖 RSS 往往只暴露最近一段楼层。
+- 匿名 JSON 或 RSS 可能被 Cloudflare 或 Discourse 频控拦截。
+- 浏览器模式是个人阅读场景下的正常 fallback。
+- 浏览器模式里 JSON 也失败时，工具会退到渲染页面文本，让 digest 至少包含可见评论内容。
 
-If `refresh` or `crawl` cannot fetch daily top topics through RSS, the client
-tries both `/top.rss?period=<period>` and `/top/<period>.rss`. With
-`--prefer browser`, it can fall back to the rendered `/top?period=<period>` page.
+如果 `refresh` 或 `crawl` 不能通过 RSS 读取每日热门，客户端会尝试 `/top.rss?period=<period>` 和 `/top/<period>.rss`。使用 `--prefer browser` 时，还可以退到渲染后的 `/top?period=<period>` 页面。
 
-## Repository Layout
+## 仓库结构
 
 ```text
-skills/linuxdo-reader/        # Codex Skill; the main interface.
-src/linuxdo_reader/           # Helper CLI, cache, fetchers, cookie auth, MCP server.
-docs/                         # Notes, examples, and implementation plans.
-tests/                        # Helper behavior tests.
+skills/linuxdo-reader/        # Codex Skill，主要入口
+src/linuxdo_reader/           # 辅助 CLI、缓存、抓取器、cookies 登录、MCP server
+docs/                         # 设计说明、示例和实现计划
+tests/                        # 行为测试
 ```
 
-## Local Development
+## 本地开发
 
 ```bash
 uv sync
@@ -197,32 +183,32 @@ uv run pytest
 uv build
 ```
 
-Run tests in an isolated environment:
+隔离环境跑测试：
 
 ```bash
 uv run --isolated --with-editable . --with pytest --with respx pytest -q
 ```
 
-Validate the bundled Skill if you have Codex `skill-creator` locally:
+如果本机装了 Codex `skill-creator`，可以校验内置 Skill：
 
 ```bash
 uv run --with pyyaml python /path/to/skill-creator/scripts/quick_validate.py skills/linuxdo-reader
 ```
 
-## Optional MCP
+## 可选 MCP
 
-MCP is not the main interface. It is only for clients that require a tool server.
+MCP 不是主要入口，只给需要 tool server 的客户端使用。
 
 ```bash
 uv run linuxdo-reader-mcp
 ```
 
-For a client config example, see `docs/mcp-config.example.json`.
+客户端配置示例见 `docs/mcp-config.example.json`。
 
-## Boundaries
+## 边界
 
-- Use this for personal reading and summarization.
-- Do not use it as a training crawler or full-site mirror.
-- Cache locally by default.
-- Treat "N 个帖子" on Linux.do as Discourse floor/post count, including the main post.
-- Run `hydrate` or `crawl` before expecting comments/floors in a digest.
+- 用于个人阅读和总结。
+- 不要拿它做训练数据爬虫或全站镜像。
+- 默认只做本地缓存。
+- Linux.do 里的「N 个帖子」按 Discourse 楼层/帖子数理解，包含主贴。
+- 想让 digest 有评论区内容，需要先运行 `hydrate` 或 `crawl`。
