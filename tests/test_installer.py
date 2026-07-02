@@ -25,10 +25,16 @@ def test_resolve_skill_dest_for_claude(monkeypatch, tmp_path) -> None:
     assert resolve_skill_dest(agent="claude") == tmp_path / ".claude" / "skills" / "linuxdo-reader"
 
 
-def test_resolve_skill_dest_local_uses_cwd(monkeypatch, tmp_path) -> None:
+def test_resolve_skill_dest_local_claude_uses_cwd(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
 
     assert resolve_skill_dest(agent="claude", local=True) == tmp_path / ".claude" / "skills" / "linuxdo-reader"
+
+
+def test_resolve_skill_dest_local_codex_uses_agents_dir(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert resolve_skill_dest(agent="codex", local=True) == tmp_path / ".agents" / "skills" / "linuxdo-reader"
 
 
 def test_resolve_skill_dest_explicit_dest_wins(tmp_path) -> None:

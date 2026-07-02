@@ -14,8 +14,9 @@ Skill tells the agent which commands to run and how to interpret their output.
 
 Note: `installer.resolve_skill_dest()` defaults to Codex's `~/.codex/skills`
 (the `--agent` flag also selects `claude` → `~/.claude/skills`; `--local`
-targets `./.<agent>/skills` in the cwd; `--dest` overrides everything; `CODEX_HOME`
-still moves the Codex root) because those are concrete install targets; the Skill
+targets each agent's project-level dir in the cwd — Codex `.agents/skills`,
+Claude `.claude/skills`; `--dest` overrides everything; `CODEX_HOME` still
+moves the Codex root) because those are concrete install targets; the Skill
 content itself is agent-agnostic.
 
 The runtime entry point into the core is `linuxdo-reader` — the Typer CLI
