@@ -43,25 +43,26 @@ Use `uv run linuxdo-reader -h` instead when working inside the repository.
 
 ## Daily Digest Workflow
 
-For a normal daily summary:
+For a normal daily summary (`digest` already shows up to 50 cached comments per
+topic by default, so no flag is needed for a rich summary):
 
 ```bash
 linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
-linuxdo-reader digest --limit 10 --comments-per-topic 25
+linuxdo-reader digest --limit 10
 ```
 
-For a deeper daily pass when the user wants more floor context:
+For an even deeper daily pass when the user wants maximum floor context:
 
 ```bash
 linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
-linuxdo-reader digest --limit 10 --comments-per-topic 50
+linuxdo-reader digest --limit 10 --comments-per-topic 120
 ```
 
 If working inside the repository:
 
 ```bash
 uv run linuxdo-reader crawl --source top --period daily --limit 10
-uv run linuxdo-reader digest --limit 10 --comments-per-topic 25
+uv run linuxdo-reader digest --limit 10
 ```
 
 Summarize the digest in Chinese unless the user asks otherwise. Group by topic,
@@ -106,7 +107,8 @@ Cache one thread:
 linuxdo-reader hydrate 2489666
 ```
 
-Render the cached thread:
+Render the cached thread (`topic` renders every cached floor, not a truncated
+window):
 
 ```bash
 linuxdo-reader topic 2489666
@@ -182,10 +184,6 @@ If `refresh` or `crawl --source top` fails, note that the helper tries both
 paths fail, summarize the attempted paths from the error and treat it as a
 temporary Linux.do/Cloudflare/TLS access issue; do not summarize stale cache as
 current hot topics.
-
-If the user asks what MCP is for, say MCP is optional for clients that require a
-tool server. For Codex-style use, this Skill plus the helper CLI is the main
-integration.
 
 ## Safety Boundary
 

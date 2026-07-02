@@ -141,7 +141,7 @@ def test_cli_has_install_skill_command() -> None:
     result = runner.invoke(app, ["install-skill", "-h"], env={"NO_COLOR": "1"})
 
     assert result.exit_code == 0
-    assert "Install the bundled Codex Skill" in result.output
+    assert "Install the bundled Skill" in result.output
 
 
 def test_cli_install_skill_from_local_source(tmp_path) -> None:

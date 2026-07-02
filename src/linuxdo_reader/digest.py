@@ -3,7 +3,9 @@ from __future__ import annotations
 from .models import Post, Topic
 
 
-def render_topic_digest(topic: Topic, posts: list[Post]) -> str:
+def render_topic_digest(topic: Topic, posts: list[Post], limit: int | None = None) -> str:
+    shown_posts = posts if limit is None else posts[:limit]
+    hidden_count = len(posts) - len(shown_posts)
     lines = [
         f"## {topic.title}",
         "",
@@ -18,17 +20,17 @@ def render_topic_digest(topic: Topic, posts: list[Post]) -> str:
         "",
         "### 讨论区摘录",
     ]
-    for post in posts[:12]:
+    for post in shown_posts:
         lines.append(f"- #{post.post_number} {post.author}: {_clip(post.text, 180)}")
-    if len(posts) > 12:
-        lines.append(f"- 还有 {len(posts) - 12} 条已缓存楼层未展示。")
+    if hidden_count > 0:
+        lines.append(f"- 还有 {hidden_count} 条已缓存楼层未展示。")
     return "\n".join(lines).strip() + "\n"
 
 
 def render_daily_digest(
     topics: list[Topic],
     posts_by_topic: dict[int, list[Post]],
-    comments_per_topic: int = 12,
+    comments_per_topic: int = 50,
 ) -> str:
     lines = ["# Linux.do 热点摘要", ""]
     for index, topic in enumerate(topics, start=1):

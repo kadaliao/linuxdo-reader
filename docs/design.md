@@ -2,9 +2,10 @@
 
 ## Goal
 
-Provide a Codex Skill for reading Linux.do hot topics and discussion floors
-without manually opening every thread. The CLI is an execution helper bundled
-with the Skill, not the primary product surface.
+Provide a Skill for reading Linux.do hot topics and discussion floors without
+manually opening every thread. The Skill uses the standard `SKILL.md` format and
+works with any agent that supports Skills (Codex, Claude, ...). The CLI is an
+execution helper bundled with the Skill, not the primary product surface.
 
 ## Architecture
 
@@ -17,26 +18,24 @@ with the Skill, not the primary product surface.
 - Browser-backed hydration is optional for cases where HTTP requests hit
   Cloudflare or the user wants deeper thread context.
 - SQLite is the durable cache. Summaries should read from this cache.
-- MCP is optional for clients that require a tool server.
 
 ## Components
 
-- `skills/linuxdo-reader`: Codex Skill and UI metadata.
+- `skills/linuxdo-reader`: the Skill and its metadata.
 - `linuxdo_reader.client`: HTTP access to RSS, topic JSON, and topic RSS.
 - `linuxdo_reader.feeds`: RSS parsing and HTML-to-text cleanup.
 - `linuxdo_reader.storage`: SQLite schema and query methods.
-- `linuxdo_reader.service`: orchestration layer shared by CLI and MCP.
+- `linuxdo_reader.service`: orchestration layer used by the CLI.
 - `linuxdo_reader.cli`: helper command for refresh, hydrate, crawl, digest,
   topic, search, and browser dump.
-- `linuxdo_reader.mcp_server`: optional MCP wrapper around the same service.
 
 ## Data Flow
 
 1. The Skill selects a workflow from the user request.
 2. `refresh` stores topic metadata from RSS.
 3. `hydrate` stores topic floors from JSON, RSS fallback, or browser mode.
-4. `digest`, `topic`, and MCP summary tools render from local cache.
-5. `search` and `search_cache` query only local SQLite content.
+4. `digest` and `topic` render from local cache.
+5. `search` queries only local SQLite content.
 
 ## Boundaries
 

@@ -1,10 +1,10 @@
 # linuxdo-reader
 
-`linuxdo-reader` 是一个面向 Codex 的 Linux.do 阅读 Skill，用来抓取、缓存并总结 Linux.do 的热门帖子、评论区和每日讨论趋势。
+`linuxdo-reader` 是一个 Linux.do 阅读 Skill（标准 `SKILL.md` 格式），用来抓取、缓存并总结 Linux.do 的热门帖子、评论区和每日讨论趋势。任何支持 Skill 的 AI 助手（如 Codex、Claude）都能加载它。
 
-这个项目的入口是 **Codex Skill**。`linuxdo-reader` CLI 是 Skill 背后的辅助工具，负责抓帖子列表、读取楼层、维护本地 SQLite 缓存、刷新你自己的 Linux.do cookies，并把内容渲染成 Markdown digest，方便 Codex 做总结。
+这个项目的入口是 **Skill**。`linuxdo-reader` CLI 是 Skill 背后的辅助工具，负责抓帖子列表、读取楼层、维护本地 SQLite 缓存、刷新你自己的 Linux.do cookies，并把内容渲染成 Markdown digest，方便 AI 助手做总结。
 
-你可以用它问 Codex：
+你可以这样问你的 AI 助手：
 
 - 今天 Linux.do 热点在聊什么？
 - 总结这个帖子的主贴和评论区分歧。
@@ -33,15 +33,15 @@ curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/instal
 linuxdo-reader install-skill --force
 ```
 
-安装后重启 Codex，然后直接问：
+安装后重启你的 AI 助手，然后直接问：
 
 ```text
 Use $linuxdo-reader to crawl today's Linux.do hot topics and summarize the comment discussions.
 ```
 
-## 在 Codex 里安装 Skill
+## 用支持 Skill 的助手安装
 
-如果你的 Codex 有内置的 `skill-installer` Skill，也可以直接让 Codex 安装：
+如果你的助手内置了 skill 安装器（例如 Codex 的 `skill-installer`），也可以直接让它安装：
 
 ```text
 Use $skill-installer to install https://github.com/kadaliao/linuxdo-reader/tree/main/skills/linuxdo-reader
@@ -80,7 +80,7 @@ linuxdo-reader --cookies-file ~/.config/linuxdo-reader/cookies.txt crawl --sourc
 ```bash
 linuxdo-reader auth refresh
 linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
-linuxdo-reader digest --limit 10 --comments-per-topic 30
+linuxdo-reader digest --limit 10
 ```
 
 或者设置环境变量：
@@ -93,7 +93,7 @@ export LINUXDO_READER_COOKIES_FILE=~/.config/linuxdo-reader/cookies.txt
 
 ## Skill 工作流
 
-这个 Skill 会指导 Codex 按正确方式读 Linux.do：
+这个 Skill 会指导 AI 助手按正确方式读 Linux.do：
 
 1. 总结当前热点前，先抓取最新数据。
 2. 使用本地 SQLite 缓存作为帖子和楼层的工作记忆。
@@ -130,13 +130,13 @@ Use $linuxdo-reader with browser-backed hydration to continue reading this Linux
 
 ## 辅助 CLI
 
-人也可以直接运行辅助 CLI。Codex 通常应该按 Skill 里的说明调用，不要临时发明命令序列。
+人也可以直接运行辅助 CLI。AI 助手通常应该按 Skill 里的说明调用，不要临时发明命令序列。
 
 生成每日 digest：
 
 ```bash
 linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
-linuxdo-reader digest --limit 10 --comments-per-topic 30
+linuxdo-reader digest --limit 10
 ```
 
 读取一个帖子：
@@ -169,8 +169,8 @@ Linux.do 的读取有一些现实约束：
 ## 仓库结构
 
 ```text
-skills/linuxdo-reader/        # Codex Skill，主要入口
-src/linuxdo_reader/           # 辅助 CLI、缓存、抓取器、cookies 登录、MCP server
+skills/linuxdo-reader/        # Skill，主要入口
+src/linuxdo_reader/           # 辅助 CLI、缓存、抓取器、cookies 登录
 docs/                         # 设计说明、示例和实现计划
 tests/                        # 行为测试
 ```
@@ -194,16 +194,6 @@ uv run --isolated --with-editable . --with pytest --with respx pytest -q
 ```bash
 uv run --with pyyaml python /path/to/skill-creator/scripts/quick_validate.py skills/linuxdo-reader
 ```
-
-## 可选 MCP
-
-MCP 不是主要入口，只给需要 tool server 的客户端使用。
-
-```bash
-uv run linuxdo-reader-mcp
-```
-
-客户端配置示例见 `docs/mcp-config.example.json`。
 
 ## 边界
 

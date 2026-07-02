@@ -68,7 +68,7 @@ class LinuxDoService:
             )
         return render_topic_digest(cached_topic, self.store.list_posts(topic_id))
 
-    def render_daily_from_cache(self, limit: int = 10, comments_per_topic: int = 12) -> str:
+    def render_daily_from_cache(self, limit: int = 10, comments_per_topic: int = 50) -> str:
         topics = self.store.list_topics(limit=limit)
         posts_by_topic = {topic.topic_id: self.store.list_posts(topic.topic_id) for topic in topics}
         return render_daily_digest(

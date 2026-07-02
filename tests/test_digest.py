@@ -47,9 +47,33 @@ def test_render_topic_digest_describes_hidden_cached_floors() -> None:
         for number in range(1, 14)
     ]
 
-    rendered = render_topic_digest(topic, posts)
+    rendered = render_topic_digest(topic, posts, limit=12)
 
     assert "还有 1 条已缓存楼层未展示" in rendered
+
+
+def test_render_topic_digest_shows_all_cached_floors_by_default() -> None:
+    topic = Topic(
+        topic_id=2489984,
+        title="囤囤鼠的末日",
+        url="https://linux.do/t/topic/2489984",
+        author="qq124415",
+        category="福利羊毛",
+        excerpt="公益站会回收囤而不用的额度。",
+        published_at="Sun, 28 Jun 2026 09:45:15 +0000",
+        source="top",
+        reply_count=102,
+        participant_count=95,
+    )
+    posts = [
+        Post(2489984, str(number), number, f"user{number}", f"评论 {number}", "", "", "", "json")
+        for number in range(1, 41)
+    ]
+
+    rendered = render_topic_digest(topic, posts)
+
+    assert "#40 user40: 评论 40" in rendered
+    assert "未展示" not in rendered
 
 
 def test_render_daily_digest_shows_configurable_cached_comments() -> None:

@@ -130,10 +130,10 @@ def digest(
         typer.Option(
             "--comments-per-topic",
             min=0,
-            max=100,
+            max=200,
             help="How many cached comments to show for each topic.",
         ),
-    ] = 12,
+    ] = 50,
 ) -> None:
     with Store(ctx.obj["db"]) as store:
         service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
@@ -204,7 +204,7 @@ def install_skill(
         typer.Option("--force", help="Replace an existing installed skill."),
     ] = False,
 ) -> None:
-    """Install the bundled Codex Skill without cloning the repository."""
+    """Install the bundled Skill without cloning the repository."""
     from .installer import (
         default_skill_dest,
         install_skill_from_directory,
@@ -217,7 +217,7 @@ def install_skill(
     else:
         installed = _run_cli(lambda: install_skill_from_github(ref=ref, dest=target, force=force))
     typer.echo(f"Installed Skill to {installed}")
-    typer.echo("Restart Codex to pick up the Skill.")
+    typer.echo("Restart your agent to pick up the Skill.")
 
 
 @auth_app.command("login")
@@ -240,10 +240,8 @@ def auth_refresh(
         typer.Option("--cookies-file", help="Where to write linux.do cookies."),
     ] = default_cookies_file(),
 ) -> None:
-    from .browser import refresh_cookies_with_browser
-
-    path = _run_cli(lambda: refresh_cookies_with_browser(cookies_file=cookies_file))
-    typer.echo(f"Saved cookies to {path}")
+    """Alias for `auth login`."""
+    auth_login(cookies_file=cookies_file)
 
 
 @app.command("seed-sample", hidden=True)

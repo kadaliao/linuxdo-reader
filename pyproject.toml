@@ -1,7 +1,7 @@
 [project]
 name = "linuxdo-reader"
 version = "0.1.3"
-description = "Codex Skill helper for reading Linux.do topics and discussion floors"
+description = "Skill helper for reading Linux.do topics and discussion floors"
 readme = "README.md"
 authors = [
     { name = "Kada Liao", email = "kadaliao@gmail.com" }
@@ -10,7 +10,6 @@ requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.13.4",
     "httpx>=0.28.1",
-    "mcp>=1.10.1",
     "typer>=0.16.0",
 ]
 
@@ -26,7 +25,6 @@ testpaths = ["tests"]
 
 [project.scripts]
 linuxdo-reader = "linuxdo_reader.cli:app"
-linuxdo-reader-mcp = "linuxdo_reader.mcp_server:main"
 
 [build-system]
 requires = ["uv_build>=0.11.23,<0.12.0"]
