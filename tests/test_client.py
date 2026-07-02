@@ -68,3 +68,21 @@ def test_fetch_topic_full_uses_print_json_then_post_ids() -> None:
     assert [post.post_number for post in posts] == [1, 2, 3]
     assert posts[0].source == "json"
     assert "偶尔才用" in posts[2].text
+
+
+@respx.mock
+def test_client_sends_configured_cookies_file(tmp_path) -> None:
+    cookies_file = tmp_path / "cookies.txt"
+    cookies_file.write_text(
+        "# Netscape HTTP Cookie File\n"
+        ".linux.do\tTRUE\t/\tTRUE\t2147483647\t_cf_bm\tabc\n",
+        encoding="utf-8",
+    )
+    route = respx.get("https://linux.do/top.rss").mock(
+        return_value=httpx.Response(200, text=LATEST_RSS)
+    )
+
+    client = LinuxDoClient(cookies_file=cookies_file)
+    client.fetch_top("daily")
+
+    assert route.calls.last.request.headers["cookie"] == "_cf_bm=abc"

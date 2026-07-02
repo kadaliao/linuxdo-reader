@@ -18,10 +18,14 @@ class LinuxDoService:
         store: Store,
         client: LinuxDoClient | None = None,
         browser_fetcher: Callable[[int], list[Post]] | None = None,
+        browser_top_fetcher: Callable[[str, int], list[Topic]] | None = None,
+        cookies_file: str | None = None,
     ) -> None:
         self.store = store
-        self.client = client or LinuxDoClient()
+        self.client = client or LinuxDoClient(cookies_file=cookies_file)
         self.browser_fetcher = browser_fetcher
+        self.browser_top_fetcher = browser_top_fetcher
+        self.cookies_file = cookies_file
 
     def refresh_top(self, period: str = "daily", limit: int = 20) -> list[Topic]:
         topics = self.client.fetch_top(period=period)[:limit]
@@ -83,7 +87,13 @@ class LinuxDoService:
         return parse_topic_list_feed(rss_text, source="sample")
 
     def crawl_top(self, period: str = "daily", limit: int = 10, prefer: str = "json") -> dict[int, int]:
-        topics = self.refresh_top(period=period, limit=limit)
+        try:
+            topics = self.refresh_top(period=period, limit=limit)
+        except httpx.HTTPError:
+            if prefer != "browser":
+                raise
+            topics = self._fetch_top_browser(period=period, limit=limit)
+            self.store.upsert_topics(topics)
         report: dict[int, int] = {}
         for topic in topics:
             posts = self.hydrate_topic(topic.topic_id, prefer=prefer)
@@ -108,7 +118,18 @@ class LinuxDoService:
             return self.browser_fetcher(topic_id)
         from .browser import fetch_topic_posts_with_browser
 
-        return fetch_topic_posts_with_browser(topic_id)
+        return fetch_topic_posts_with_browser(topic_id, cookies_file=self.cookies_file)
+
+    def _fetch_top_browser(self, period: str, limit: int) -> list[Topic]:
+        if self.browser_top_fetcher:
+            return self.browser_top_fetcher(period, limit)
+        from .browser import fetch_top_topics_with_browser
+
+        return fetch_top_topics_with_browser(
+            period=period,
+            limit=limit,
+            cookies_file=self.cookies_file,
+        )
 
 
 def _coerce_topic_id(topic: int | str) -> int:

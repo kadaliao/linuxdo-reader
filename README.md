@@ -1,135 +1,136 @@
 # linuxdo-reader
 
-A Codex Skill for reading and summarizing Linux.do hot topics and thread
-discussions.
+Linux.do Reader is a Codex Skill for reading Linux.do hot topics, comments, and
+daily discussion trends.
 
-The Skill is the product. The `linuxdo-reader` CLI is the helper program the
-Skill uses to fetch RSS, hydrate thread floors, cache data locally, and render
-Markdown digests.
+The Skill is the product. The `linuxdo-reader` CLI is the helper underneath it:
+it fetches topic lists, hydrates discussion floors, keeps a local SQLite cache,
+refreshes your own Linux.do cookies, and renders Markdown digests for the agent
+to summarize.
 
-Use this when you want an agent to answer questions like:
+Use it when you want to ask Codex things like:
 
-- "今天 Linux.do 热点在聊什么？"
-- "帮我总结这个帖子的主贴和评论区分歧。"
-- "把今天热门帖子抓下来，按话题给我一个 digest。"
-- "为什么这个帖子显示 134 楼但只缓存了 25 楼？继续往后读。"
+- 今天 Linux.do 热点在聊什么？
+- 总结这个帖子的主贴和评论区分歧。
+- 抓今天热门帖子，按主题输出 digest。
+- 这个帖显示 134 楼但缓存只有 25 楼，继续往后读。
 
-## Quick Start
+## One-Command Install
 
-Install the helper CLI:
-
-```bash
-uv tool install git+https://github.com/kadaliao/linuxdo-reader
-```
-
-Install the Skill into Codex:
+Install the Skill and helper CLI from this repository:
 
 ```bash
 git clone https://github.com/kadaliao/linuxdo-reader
+cd linuxdo-reader
 mkdir -p ~/.codex/skills
-cp -R linuxdo-reader/skills/linuxdo-reader ~/.codex/skills/linuxdo-reader
+cp -R skills/linuxdo-reader ~/.codex/skills/linuxdo-reader
+uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
+uv tool run playwright install chromium
 ```
 
 Then ask Codex:
 
 ```text
-Use $linuxdo-reader to crawl today's Linux.do hot topics and summarize the main discussions.
+Use $linuxdo-reader to crawl today's Linux.do hot topics and summarize the comment discussions.
 ```
 
-## What The Skill Does
+## Personal Login Cookies
 
-The Skill teaches an agent the correct workflow:
+Linux.do may block anonymous RSS or JSON requests with Cloudflare/Discourse
+checks. For personal reading, let the helper maintain a cookies file from your
+own browser session:
 
-1. Use Linux.do RSS feeds to discover hot or latest topics.
-2. Hydrate selected topics into a local SQLite cache.
-3. Prefer Discourse JSON when available.
-4. Fall back to topic RSS when JSON is blocked.
-5. Use browser-backed hydration when the user asks for fuller thread context.
-6. Render summaries from local cache instead of repeatedly hitting the site.
+```bash
+linuxdo-reader auth refresh
+```
 
-This matters because Linux.do access has practical constraints:
-
-- User API keys appear disabled for normal users.
-- RSS works well for discovery.
-- Topic RSS often exposes only a recent 25-floor window.
-- Anonymous JSON can be blocked by Cloudflare.
-- Browser mode is the practical fallback when the user wants deeper threads.
-
-## Repository Layout
+The first run opens a Playwright Chromium profile. Log in or complete the site
+check in that window if needed. The helper saves Linux.do cookies to:
 
 ```text
-skills/linuxdo-reader/        # The Codex Skill. This is the main interface.
-src/linuxdo_reader/           # Helper CLI, cache, RSS/JSON fetchers, MCP server.
-docs/                         # Implementation notes and optional MCP example.
-tests/                        # Helper behavior tests.
+~/.config/linuxdo-reader/cookies.txt
 ```
 
-Read the Skill first:
+Normal commands automatically use this default file. You can also pass a custom
+file:
+
+```bash
+linuxdo-reader auth refresh --cookies-file ~/.config/linuxdo-reader/cookies.txt
+linuxdo-reader --cookies-file ~/.config/linuxdo-reader/cookies.txt crawl --source top --period daily --limit 10 --prefer browser
+```
+
+For automation:
+
+```bash
+linuxdo-reader auth refresh
+linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
+linuxdo-reader digest --limit 10 --comments-per-topic 30
+```
+
+Or set:
+
+```bash
+export LINUXDO_READER_COOKIES_FILE=~/.config/linuxdo-reader/cookies.txt
+```
+
+The helper does not read Chrome or Safari cookie databases directly. It only uses
+the cookies file you explicitly configure or refresh through its own Playwright
+profile.
+
+## Skill Workflow
+
+The bundled Skill teaches Codex to:
+
+1. Fetch current Linux.do data before summarizing current topics.
+2. Use the local SQLite cache as working memory.
+3. Distinguish topic metadata from cached comments/floors.
+4. Prefer RSS/JSON when available.
+5. Use browser-backed reading with your cookies when feeds are blocked.
+6. Render summaries from cache instead of repeatedly hitting the site.
+
+The Skill lives here:
 
 ```text
 skills/linuxdo-reader/SKILL.md
 ```
 
-## Agent Usage
+## Common Prompts
 
-Typical prompt:
+Daily hot topics:
 
 ```text
 Use $linuxdo-reader to crawl Linux.do daily hot topics, include cached discussion floors, and produce a concise Chinese digest.
 ```
 
-For one thread:
+One thread:
 
 ```text
-Use $linuxdo-reader to hydrate https://linux.do/t/topic/2489666 and summarize the main post plus the discussion positions.
+Use $linuxdo-reader to hydrate https://linux.do/t/topic/2489666 and summarize the main post plus discussion positions.
 ```
 
-For deeper reading when RSS only returns recent floors:
+Deeper browser-backed read:
 
 ```text
-Use $linuxdo-reader with browser-backed hydration to read more floors from this Linux.do thread.
+Use $linuxdo-reader with browser-backed hydration to continue reading this Linux.do thread beyond the RSS-visible floors.
 ```
 
 ## Helper CLI
 
 Humans can run the helper directly. Agents should normally follow the Skill
-instructions instead of inventing command sequences.
+instructions rather than inventing command sequences.
 
-Daily hot-topic digest:
-
-```bash
-linuxdo-reader crawl --source top --period daily --limit 10
-linuxdo-reader digest --limit 10 --comments-per-topic 25
-```
-
-Same workflow from a cloned development checkout:
+Daily digest:
 
 ```bash
-uv run linuxdo-reader crawl --source top --period daily --limit 10
-uv run linuxdo-reader digest --limit 10 --comments-per-topic 25
+linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
+linuxdo-reader digest --limit 10 --comments-per-topic 30
 ```
 
 Hydrate one topic:
 
 ```bash
-linuxdo-reader hydrate https://linux.do/t/topic/2489984
+linuxdo-reader hydrate https://linux.do/t/topic/2489984 --prefer browser
 linuxdo-reader topic 2489984
-```
-
-Use browser-backed hydration from a development checkout:
-
-```bash
-uv pip install playwright
-uv run playwright install chromium
-uv run linuxdo-reader hydrate 2489666 --prefer browser
-```
-
-Use browser-backed hydration from a `uv tool` install:
-
-```bash
-uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
-uv tool run playwright install chromium
-linuxdo-reader hydrate 2489666 --prefer browser
 ```
 
 Search cached floors:
@@ -140,10 +141,29 @@ linuxdo-reader search GLM --limit 20
 
 Every command accepts `-h` and `--help`.
 
-If `refresh` or `crawl` cannot fetch daily top topics, the client tries both
-`/top.rss?period=daily` and `/top/daily.rss` with a short retry. If both fail,
-the error lists each attempted feed path; this usually points to a temporary
-Linux.do/Cloudflare/TLS path issue rather than an empty cache.
+## Access Model
+
+Linux.do access has practical constraints:
+
+- RSS is useful for discovery when available.
+- Topic RSS may expose only a recent floor window.
+- Anonymous JSON or RSS can be blocked by Cloudflare or Discourse rate limits.
+- Browser mode is the normal fallback for personal reading.
+- If JSON fails in browser mode, the helper falls back to rendered page text so
+  the digest can still include visible discussion content.
+
+If `refresh` or `crawl` cannot fetch daily top topics through RSS, the client
+tries both `/top.rss?period=<period>` and `/top/<period>.rss`. With
+`--prefer browser`, it can fall back to the rendered `/top?period=<period>` page.
+
+## Repository Layout
+
+```text
+skills/linuxdo-reader/        # Codex Skill; the main interface.
+src/linuxdo_reader/           # Helper CLI, cache, fetchers, cookie auth, MCP server.
+docs/                         # Notes, examples, and implementation plans.
+tests/                        # Helper behavior tests.
+```
 
 ## Local Development
 
@@ -153,20 +173,21 @@ uv run pytest
 uv build
 ```
 
-Validate the bundled Skill:
+Run tests in an isolated environment:
+
+```bash
+uv run --isolated --with-editable . --with pytest --with respx pytest -q
+```
+
+Validate the bundled Skill if you have Codex `skill-creator` locally:
 
 ```bash
 uv run --with pyyaml python /path/to/skill-creator/scripts/quick_validate.py skills/linuxdo-reader
 ```
 
-This validation command is for maintainers who have the Codex `skill-creator`
-Skill installed locally.
-
 ## Optional MCP
 
 MCP is not the main interface. It is only for clients that require a tool server.
-
-Run the optional server:
 
 ```bash
 uv run linuxdo-reader-mcp
@@ -180,4 +201,4 @@ For a client config example, see `docs/mcp-config.example.json`.
 - Do not use it as a training crawler or full-site mirror.
 - Cache locally by default.
 - Treat "N 个帖子" on Linux.do as Discourse floor/post count, including the main post.
-- Run `hydrate` or `crawl` before expecting comment/floor content in a digest.
+- Run `hydrate` or `crawl` before expecting comments/floors in a digest.

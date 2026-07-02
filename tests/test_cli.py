@@ -6,6 +6,8 @@ from typer.testing import CliRunner
 
 from linuxdo_reader.cli import app
 
+from .fixtures import LATEST_RSS
+
 
 def test_cli_digest_reads_cache(tmp_path) -> None:
     db_path = tmp_path / "linuxdo.sqlite"
@@ -89,3 +91,45 @@ def test_cli_refresh_reports_feed_errors_without_traceback(tmp_path) -> None:
     assert result.exit_code == 1
     assert "All linux.do feed requests failed" in result.output
     assert "Traceback" not in result.output
+
+
+@respx.mock
+def test_cli_refresh_uses_configured_cookies_file(tmp_path) -> None:
+    cookies_file = tmp_path / "cookies.txt"
+    cookies_file.write_text(
+        "# Netscape HTTP Cookie File\n"
+        ".linux.do\tTRUE\t/\tTRUE\t2147483647\t_cf_bm\tabc\n",
+        encoding="utf-8",
+    )
+    route = respx.get("https://linux.do/top.rss").mock(
+        return_value=httpx.Response(200, text=LATEST_RSS)
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "--db",
+            str(tmp_path / "linuxdo.sqlite"),
+            "--cookies-file",
+            str(cookies_file),
+            "refresh",
+            "--source",
+            "top",
+            "--period",
+            "daily",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert route.calls.last.request.headers["cookie"] == "_cf_bm=abc"
+
+
+def test_cli_has_auth_commands() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["auth", "-h"], env={"NO_COLOR": "1"})
+
+    assert result.exit_code == 0
+    assert "login" in result.output
+    assert "refresh" in result.output

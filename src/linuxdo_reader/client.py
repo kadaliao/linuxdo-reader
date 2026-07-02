@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from .cookies import load_cookie_jar
 from .feeds import canonical_topic_url, html_to_text, parse_topic_feed, parse_topic_list_feed
 from .models import Post, Topic
 
@@ -15,6 +16,7 @@ class LinuxDoClient:
         base_url: str = "https://linux.do",
         timeout: float = 20.0,
         user_agent: str = "Mozilla/5.0 linuxdo-reader/0.1",
+        cookies_file: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(
@@ -22,6 +24,7 @@ class LinuxDoClient:
             timeout=timeout,
             headers={"User-Agent": user_agent},
             follow_redirects=True,
+            cookies=load_cookie_jar(cookies_file),
         )
 
     def close(self) -> None:

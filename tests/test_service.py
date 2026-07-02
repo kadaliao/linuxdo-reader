@@ -76,6 +76,27 @@ def test_service_crawl_top_hydrates_each_refreshed_topic(tmp_path) -> None:
     assert len(store.list_posts(2489984)) == 1
 
 
+@respx.mock
+def test_service_crawl_top_uses_browser_topic_list_when_feeds_fail(tmp_path) -> None:
+    respx.get("https://linux.do/top.rss").mock(return_value=httpx.Response(403))
+    respx.get("https://linux.do/top/daily.rss").mock(
+        side_effect=httpx.ConnectError("TLS EOF")
+    )
+    store = Store(tmp_path / "linuxdo.sqlite")
+    service = LinuxDoService(
+        store=store,
+        browser_top_fetcher=lambda period, limit: service.parse_topics_for_tests(
+            LATEST_RSS
+        )[:limit],
+        browser_fetcher=lambda topic_id: [service.make_post_for_tests(topic_id, 1, "楼层")],
+    )
+
+    report = service.crawl_top(period="daily", limit=2, prefer="browser")
+
+    assert report == {2491173: 1, 2489984: 1}
+    assert {topic.topic_id for topic in store.list_topics(limit=2)} == {2491173, 2489984}
+
+
 def test_service_renders_digest_from_cache(tmp_path) -> None:
     store = Store(tmp_path / "linuxdo.sqlite")
     service = LinuxDoService(store=store)

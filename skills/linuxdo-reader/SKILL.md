@@ -29,7 +29,8 @@ Choose the command form from the environment:
 - If no helper command is available, install it:
 
 ```bash
-uv tool install git+https://github.com/kadaliao/linuxdo-reader
+uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
+uv tool run playwright install chromium
 ```
 
 Before relying on behavior, check help:
@@ -46,7 +47,7 @@ Use `uv run linuxdo-reader -h` instead when working inside the repository.
 For a normal daily summary:
 
 ```bash
-linuxdo-reader crawl --source top --period daily --limit 10
+linuxdo-reader crawl --source top --period daily --limit 10 --prefer browser
 linuxdo-reader digest --limit 10 --comments-per-topic 25
 ```
 
@@ -66,6 +67,37 @@ uv run linuxdo-reader digest --limit 10 --comments-per-topic 25
 
 Summarize the digest in Chinese unless the user asks otherwise. Group by topic,
 include the thread link, and distinguish the main post from discussion floors.
+
+## Personal Cookies
+
+When RSS or anonymous JSON is blocked, use the user's own Linux.do browser
+session instead of stale cache.
+
+Refresh the default cookies file:
+
+```bash
+linuxdo-reader auth refresh
+```
+
+The first run may open Chromium and require the user to log in or complete a
+site check. The helper saves Linux.do cookies to:
+
+```text
+~/.config/linuxdo-reader/cookies.txt
+```
+
+Normal commands use this file automatically. If the user provides a custom file,
+pass it globally:
+
+```bash
+linuxdo-reader --cookies-file ~/.config/linuxdo-reader/cookies.txt crawl --source top --period daily --limit 10 --prefer browser
+```
+
+You may also use:
+
+```bash
+export LINUXDO_READER_COOKIES_FILE=~/.config/linuxdo-reader/cookies.txt
+```
 
 ## One Topic Workflow
 
@@ -121,6 +153,10 @@ uv run linuxdo-reader topic 2489666
 
 If browser mode is not available, say so explicitly and summarize from the
 cached/RSS-visible floors only.
+
+If browser JSON fails because of Discourse/Cloudflare limits, the helper may
+fall back to rendered page text. Treat those cached posts as visible page
+samples, not guaranteed full thread history.
 
 ## Search Workflow
 

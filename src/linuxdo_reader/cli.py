@@ -7,6 +7,7 @@ from typing import Annotated, NoReturn, TypeVar
 import httpx
 import typer
 
+from .cookies import default_cookies_file
 from .service import LinuxDoService
 from .storage import Store
 
@@ -16,6 +17,8 @@ app = typer.Typer(
     help="Helper CLI for the Linux.do Reader skill.",
     context_settings=CONTEXT_SETTINGS,
 )
+auth_app = typer.Typer(help="Manage Linux.do login cookies.", context_settings=CONTEXT_SETTINGS)
+app.add_typer(auth_app, name="auth")
 
 T = TypeVar("T")
 
@@ -43,8 +46,16 @@ def main(
         Path,
         typer.Option("--db", help="SQLite cache path."),
     ] = default_db_path(),
+    cookies_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--cookies-file",
+            envvar="LINUXDO_READER_COOKIES_FILE",
+            help="Netscape cookies.txt file for linux.do.",
+        ),
+    ] = None,
 ) -> None:
-    ctx.obj = {"db": db}
+    ctx.obj = {"db": db, "cookies_file": cookies_file}
 
 
 @app.command("refresh")
@@ -56,7 +67,7 @@ def refresh(
 ) -> None:
     def action() -> list:
         with Store(ctx.obj["db"]) as store:
-            service = LinuxDoService(store)
+            service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
             return (
                 service.refresh_latest(limit=limit)
                 if source == "latest"
@@ -75,7 +86,7 @@ def hydrate(
 ) -> None:
     def action() -> list:
         with Store(ctx.obj["db"]) as store:
-            service = LinuxDoService(store)
+            service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
             return service.hydrate_topic(topic, prefer=prefer)
 
     posts = _run_cli(action)
@@ -92,7 +103,7 @@ def crawl(
 ) -> None:
     def action() -> dict[int, int]:
         with Store(ctx.obj["db"]) as store:
-            service = LinuxDoService(store)
+            service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
             if source == "latest":
                 topics = service.refresh_latest(limit=limit)
                 return {
@@ -125,7 +136,7 @@ def digest(
     ] = 12,
 ) -> None:
     with Store(ctx.obj["db"]) as store:
-        service = LinuxDoService(store)
+        service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
         rendered = service.render_daily_from_cache(
             limit=limit,
             comments_per_topic=comments_per_topic,
@@ -144,7 +155,7 @@ def topic_digest(
     topic: Annotated[str, typer.Argument(help="Topic id or linux.do topic URL.")],
 ) -> None:
     with Store(ctx.obj["db"]) as store:
-        service = LinuxDoService(store)
+        service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
         typer.echo(service.render_topic_from_cache(topic))
 
 
@@ -172,6 +183,32 @@ def browser_dump(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(text, encoding="utf-8")
     typer.echo(str(output))
+
+
+@auth_app.command("login")
+def auth_login(
+    cookies_file: Annotated[
+        Path,
+        typer.Option("--cookies-file", help="Where to write linux.do cookies."),
+    ] = default_cookies_file(),
+) -> None:
+    from .browser import refresh_cookies_with_browser
+
+    path = _run_cli(lambda: refresh_cookies_with_browser(cookies_file=cookies_file))
+    typer.echo(f"Saved cookies to {path}")
+
+
+@auth_app.command("refresh")
+def auth_refresh(
+    cookies_file: Annotated[
+        Path,
+        typer.Option("--cookies-file", help="Where to write linux.do cookies."),
+    ] = default_cookies_file(),
+) -> None:
+    from .browser import refresh_cookies_with_browser
+
+    path = _run_cli(lambda: refresh_cookies_with_browser(cookies_file=cookies_file))
+    typer.echo(f"Saved cookies to {path}")
 
 
 @app.command("seed-sample", hidden=True)
