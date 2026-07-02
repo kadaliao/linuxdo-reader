@@ -240,10 +240,8 @@ def auth_refresh(
         typer.Option("--cookies-file", help="Where to write linux.do cookies."),
     ] = default_cookies_file(),
 ) -> None:
-    from .browser import refresh_cookies_with_browser
-
-    path = _run_cli(lambda: refresh_cookies_with_browser(cookies_file=cookies_file))
-    typer.echo(f"Saved cookies to {path}")
+    """Alias for `auth login`."""
+    auth_login(cookies_file=cookies_file)
 
 
 @app.command("seed-sample", hidden=True)
