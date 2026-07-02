@@ -6,10 +6,15 @@ Guidance for AI assistants working in this repository.
 
 `linuxdo-reader` fetches, caches, and summarizes hot topics and discussion
 floors from [Linux.do](https://linux.do) (a Discourse forum). The **product is a
-Codex Skill** (`skills/linuxdo-reader/SKILL.md`); the Python package is the
-helper tool that Skill drives. When changing behavior, keep the Skill's
-documented workflow and the CLI in sync — the Skill tells the agent which
-commands to run and how to interpret their output.
+Skill** (`skills/linuxdo-reader/SKILL.md`) in the standard `SKILL.md` format,
+usable by any agent that supports Skills (Codex, Claude, ...) — it is not
+Codex-specific. The Python package is the helper tool that Skill drives. When
+changing behavior, keep the Skill's documented workflow and the CLI in sync — the
+Skill tells the agent which commands to run and how to interpret their output.
+
+Note: `installer.default_skill_dest()` still defaults to Codex's `~/.codex/skills`
+(overridable via `CODEX_HOME` or the `--dest` flag) because that is a concrete
+install target; the Skill content itself is agent-agnostic.
 
 The runtime entry point into the core is `linuxdo-reader` — the Typer CLI
 (`linuxdo_reader.cli:app`).
@@ -82,6 +87,11 @@ floors" means metadata-only, not an error.
   raise `RuntimeError(PLAYWRIGHT_INSTALL_HINT)`.
 - Digest/CLI user-facing output is **Chinese**; error prefixes and internal logs
   are English. `digest.py` clips text with `_clip`.
+- Rendering defaults favor showing plenty of comments: `render_topic_digest`
+  shows **all** cached floors unless a `limit` is passed (the `topic` command
+  passes none), and the daily `digest` defaults to `comments_per_topic=50`
+  (CLI/service). Fetching (`hydrate`/`crawl` via JSON or browser) already walks
+  the full `post_stream`; the display layer is where counts are bounded.
 - Cookies are handled only via an explicit Netscape `cookies.txt` (default
   `~/.config/linuxdo-reader/cookies.txt`, env `LINUXDO_READER_COOKIES_FILE`) or a
   Playwright profile the tool controls. Never read the OS browser cookie stores.

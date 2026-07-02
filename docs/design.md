@@ -2,9 +2,10 @@
 
 ## Goal
 
-Provide a Codex Skill for reading Linux.do hot topics and discussion floors
-without manually opening every thread. The CLI is an execution helper bundled
-with the Skill, not the primary product surface.
+Provide a Skill for reading Linux.do hot topics and discussion floors without
+manually opening every thread. The Skill uses the standard `SKILL.md` format and
+works with any agent that supports Skills (Codex, Claude, ...). The CLI is an
+execution helper bundled with the Skill, not the primary product surface.
 
 ## Architecture
 
@@ -20,7 +21,7 @@ with the Skill, not the primary product surface.
 
 ## Components
 
-- `skills/linuxdo-reader`: Codex Skill and UI metadata.
+- `skills/linuxdo-reader`: the Skill and its metadata.
 - `linuxdo_reader.client`: HTTP access to RSS, topic JSON, and topic RSS.
 - `linuxdo_reader.feeds`: RSS parsing and HTML-to-text cleanup.
 - `linuxdo_reader.storage`: SQLite schema and query methods.
