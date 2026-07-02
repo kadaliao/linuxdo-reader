@@ -187,9 +187,23 @@ def browser_dump(
 
 @app.command("install-skill")
 def install_skill(
+    agent: Annotated[
+        str | None,
+        typer.Option(
+            "--agent",
+            help="Install into a known agent's skill dir: codex or claude. Defaults to codex. Ignored when --dest is set.",
+        ),
+    ] = None,
+    local: Annotated[
+        bool,
+        typer.Option(
+            "--local",
+            help="Install into ./.<agent>/skills in the current directory instead of the home skills dir.",
+        ),
+    ] = False,
     dest: Annotated[
         Path | None,
-        typer.Option("--dest", help="Destination skill directory."),
+        typer.Option("--dest", help="Explicit destination skill directory (overrides --agent/--local)."),
     ] = None,
     ref: Annotated[
         str | None,
@@ -206,12 +220,15 @@ def install_skill(
 ) -> None:
     """Install the bundled Skill without cloning the repository."""
     from .installer import (
-        default_skill_dest,
         install_skill_from_directory,
         install_skill_from_github,
+        resolve_skill_dest,
     )
 
-    target = dest or default_skill_dest()
+    try:
+        target = resolve_skill_dest(agent=agent, dest=dest, local=local)
+    except ValueError as exc:
+        _fail(str(exc))
     if source:
         installed = _run_cli(lambda: install_skill_from_directory(source, target, force=force))
     else:

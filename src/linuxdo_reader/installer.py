@@ -5,17 +5,82 @@ import shutil
 import tarfile
 import tempfile
 import urllib.request
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import __version__
 
 REPO_ARCHIVE_URL = "https://github.com/kadaliao/linuxdo-reader/archive/{ref}.tar.gz"
 SKILL_RELATIVE_PATH = Path("skills") / "linuxdo-reader"
+SKILL_DIR_NAME = "linuxdo-reader"
+
+
+def _codex_home_skills_root() -> Path:
+    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+    return codex_home / "skills"
+
+
+def _claude_home_skills_root() -> Path:
+    return Path.home() / ".claude" / "skills"
+
+
+@dataclass(frozen=True)
+class AgentSkillDirs:
+    """Where a given agent loads Skills from.
+
+    ``home_root`` is the per-user directory; ``local_relative`` is the
+    project-level directory, resolved against the current working directory.
+    These differ per agent (e.g. Codex reads project Skills from ``.agents/``,
+    not ``.codex/``), so ``--local`` cannot assume a uniform layout.
+    """
+
+    home_root: Callable[[], Path]
+    local_relative: Path
+
+
+# Known agents mapped to their Skill directories.
+# Add an entry here when another agent gains a standard Skill location.
+KNOWN_AGENTS: dict[str, AgentSkillDirs] = {
+    "codex": AgentSkillDirs(
+        home_root=_codex_home_skills_root,
+        local_relative=Path(".agents") / "skills",
+    ),
+    "claude": AgentSkillDirs(
+        home_root=_claude_home_skills_root,
+        local_relative=Path(".claude") / "skills",
+    ),
+}
+DEFAULT_AGENT = "codex"
 
 
 def default_skill_dest() -> Path:
-    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
-    return codex_home / "skills" / "linuxdo-reader"
+    return _codex_home_skills_root() / SKILL_DIR_NAME
+
+
+def resolve_skill_dest(
+    agent: str | None = None,
+    dest: str | Path | None = None,
+    local: bool = False,
+) -> Path:
+    """Resolve where the Skill should be installed.
+
+    Precedence: an explicit ``dest`` wins and is used verbatim. Otherwise the
+    destination is ``<base>/linuxdo-reader`` where ``<base>`` is the known
+    agent's per-user skills directory, or its project-level directory under the
+    current working directory when ``local`` is set.
+    """
+    if dest is not None:
+        return Path(dest).expanduser()
+    resolved_agent = (agent or DEFAULT_AGENT).lower()
+    dirs = KNOWN_AGENTS.get(resolved_agent)
+    if dirs is None:
+        known = ", ".join(sorted(KNOWN_AGENTS))
+        raise ValueError(
+            f"Unknown agent {resolved_agent!r}; choose from {known}, or pass --dest for a custom path"
+        )
+    base = (Path.cwd() / dirs.local_relative) if local else dirs.home_root()
+    return base / SKILL_DIR_NAME
 
 
 def default_ref() -> str:
