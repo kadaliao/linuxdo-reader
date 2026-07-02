@@ -185,6 +185,41 @@ def browser_dump(
     typer.echo(str(output))
 
 
+@app.command("install-skill")
+def install_skill(
+    dest: Annotated[
+        Path | None,
+        typer.Option("--dest", help="Destination skill directory."),
+    ] = None,
+    ref: Annotated[
+        str | None,
+        typer.Option("--ref", help="GitHub ref to install from. Defaults to this package version tag."),
+    ] = None,
+    source: Annotated[
+        Path | None,
+        typer.Option("--source", help="Install from a local skill directory instead of GitHub."),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Replace an existing installed skill."),
+    ] = False,
+) -> None:
+    """Install the bundled Codex Skill without cloning the repository."""
+    from .installer import (
+        default_skill_dest,
+        install_skill_from_directory,
+        install_skill_from_github,
+    )
+
+    target = dest or default_skill_dest()
+    if source:
+        installed = _run_cli(lambda: install_skill_from_directory(source, target, force=force))
+    else:
+        installed = _run_cli(lambda: install_skill_from_github(ref=ref, dest=target, force=force))
+    typer.echo(f"Installed Skill to {installed}")
+    typer.echo("Restart Codex to pick up the Skill.")
+
+
 @auth_app.command("login")
 def auth_login(
     cookies_file: Annotated[

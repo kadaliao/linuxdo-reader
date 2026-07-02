@@ -133,3 +133,35 @@ def test_cli_has_auth_commands() -> None:
     assert result.exit_code == 0
     assert "login" in result.output
     assert "refresh" in result.output
+
+
+def test_cli_has_install_skill_command() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["install-skill", "-h"], env={"NO_COLOR": "1"})
+
+    assert result.exit_code == 0
+    assert "Install the bundled Codex Skill" in result.output
+
+
+def test_cli_install_skill_from_local_source(tmp_path) -> None:
+    source = tmp_path / "source" / "linuxdo-reader"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("# Linux.do Reader\n", encoding="utf-8")
+    dest = tmp_path / "codex" / "skills" / "linuxdo-reader"
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "install-skill",
+            "--source",
+            str(source),
+            "--dest",
+            str(dest),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert f"Installed Skill to {dest}" in result.output
+    assert (dest / "SKILL.md").exists()

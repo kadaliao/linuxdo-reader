@@ -29,8 +29,7 @@ Choose the command form from the environment:
 - If no helper command is available, install it:
 
 ```bash
-uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
-uv tool run playwright install chromium
+curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash
 ```
 
 Before relying on behavior, check help:

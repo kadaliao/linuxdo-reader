@@ -17,21 +17,45 @@ Use it when you want to ask Codex things like:
 
 ## One-Command Install
 
-Install the Skill and helper CLI from this repository:
+Install the Skill, helper CLI, and Playwright Chromium:
 
 ```bash
-git clone https://github.com/kadaliao/linuxdo-reader
-cd linuxdo-reader
-mkdir -p ~/.codex/skills
-cp -R skills/linuxdo-reader ~/.codex/skills/linuxdo-reader
-uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
-uv tool run playwright install chromium
+curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash
+```
+
+Install a pinned release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash -s -- --version v0.1.2
+```
+
+The installer requires `uv`. It does not require `git clone`.
+
+If you already installed the helper CLI, you can install or update only the Skill:
+
+```bash
+linuxdo-reader install-skill --force
 ```
 
 Then ask Codex:
 
 ```text
 Use $linuxdo-reader to crawl today's Linux.do hot topics and summarize the comment discussions.
+```
+
+## Install From Codex
+
+If your Codex has the built-in `skill-installer` Skill, you can also ask Codex:
+
+```text
+Use $skill-installer to install https://github.com/kadaliao/linuxdo-reader/tree/main/skills/linuxdo-reader
+```
+
+That installs the Skill only. You still need the helper CLI for reading Linux.do:
+
+```bash
+uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force
+uv tool run playwright install chromium
 ```
 
 ## Personal Login Cookies
