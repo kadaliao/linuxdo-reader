@@ -183,10 +183,6 @@ paths fail, summarize the attempted paths from the error and treat it as a
 temporary Linux.do/Cloudflare/TLS access issue; do not summarize stale cache as
 current hot topics.
 
-If the user asks what MCP is for, say MCP is optional for clients that require a
-tool server. For Codex-style use, this Skill plus the helper CLI is the main
-integration.
-
 ## Safety Boundary
 
 Use this for personal reading and summarization. Do not attempt to create API

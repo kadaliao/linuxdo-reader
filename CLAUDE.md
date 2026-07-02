@@ -11,12 +11,8 @@ helper tool that Skill drives. When changing behavior, keep the Skill's
 documented workflow and the CLI in sync — the Skill tells the agent which
 commands to run and how to interpret their output.
 
-There are two runtime entry points into the same core:
-
-- `linuxdo-reader` — the Typer CLI (`linuxdo_reader.cli:app`), the primary one.
-- `linuxdo-reader-mcp` — an optional MCP tool server (`linuxdo_reader.mcp_server:main`)
-  for clients that need one. Not the main path; keep its tools a thin wrapper
-  over the service.
+The runtime entry point into the core is `linuxdo-reader` — the Typer CLI
+(`linuxdo_reader.cli:app`).
 
 ## Architecture
 
@@ -24,7 +20,7 @@ Layered, with one orchestrator in the middle. Entry points stay thin; all logic
 lives below `service.py`.
 
 ```
-cli.py / mcp_server.py     entry points (arg parsing only, thin)
+cli.py                     entry point (arg parsing only, thin)
         │
         ▼
 service.py  ── LinuxDoService  orchestrates fetch → cache → render
@@ -136,7 +132,7 @@ A new read/summarize feature typically touches, in order:
 2. `feeds.py` / `models.py` — parsing into `Topic`/`Post`.
 3. `storage.py` — persistence, if a new field/table is needed.
 4. `service.py` — orchestration on `LinuxDoService`.
-5. `cli.py` (and `mcp_server.py` if it should be exposed there) — the command.
+5. `cli.py` — the command.
 6. `digest.py` — rendering, if it shows in a digest.
 7. `tests/` — mocked coverage.
 8. `skills/linuxdo-reader/SKILL.md` + `README.md` — agent + human docs.

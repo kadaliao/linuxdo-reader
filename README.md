@@ -170,7 +170,7 @@ Linux.do 的读取有一些现实约束：
 
 ```text
 skills/linuxdo-reader/        # Codex Skill，主要入口
-src/linuxdo_reader/           # 辅助 CLI、缓存、抓取器、cookies 登录、MCP server
+src/linuxdo_reader/           # 辅助 CLI、缓存、抓取器、cookies 登录
 docs/                         # 设计说明、示例和实现计划
 tests/                        # 行为测试
 ```
@@ -194,16 +194,6 @@ uv run --isolated --with-editable . --with pytest --with respx pytest -q
 ```bash
 uv run --with pyyaml python /path/to/skill-creator/scripts/quick_validate.py skills/linuxdo-reader
 ```
-
-## 可选 MCP
-
-MCP 不是主要入口，只给需要 tool server 的客户端使用。
-
-```bash
-uv run linuxdo-reader-mcp
-```
-
-客户端配置示例见 `docs/mcp-config.example.json`。
 
 ## 边界
 
