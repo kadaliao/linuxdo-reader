@@ -5,17 +5,63 @@ import shutil
 import tarfile
 import tempfile
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 
 from . import __version__
 
 REPO_ARCHIVE_URL = "https://github.com/kadaliao/linuxdo-reader/archive/{ref}.tar.gz"
 SKILL_RELATIVE_PATH = Path("skills") / "linuxdo-reader"
+SKILL_DIR_NAME = "linuxdo-reader"
+
+
+def _codex_skills_root() -> Path:
+    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+    return codex_home / "skills"
+
+
+def _claude_skills_root() -> Path:
+    return Path.home() / ".claude" / "skills"
+
+
+# Known agents mapped to the base directory they load personal Skills from.
+# Add an entry here when another agent gains a standard Skill location.
+KNOWN_AGENTS: dict[str, Callable[[], Path]] = {
+    "codex": _codex_skills_root,
+    "claude": _claude_skills_root,
+}
+DEFAULT_AGENT = "codex"
 
 
 def default_skill_dest() -> Path:
-    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
-    return codex_home / "skills" / "linuxdo-reader"
+    return _codex_skills_root() / SKILL_DIR_NAME
+
+
+def resolve_skill_dest(
+    agent: str | None = None,
+    dest: str | Path | None = None,
+    local: bool = False,
+) -> Path:
+    """Resolve where the Skill should be installed.
+
+    Precedence: an explicit ``dest`` wins and is used verbatim. Otherwise the
+    destination is ``<base>/linuxdo-reader`` where ``<base>`` is either the
+    known agent's personal skills directory, or ``./.<agent>/skills`` in the
+    current working directory when ``local`` is set.
+    """
+    if dest is not None:
+        return Path(dest).expanduser()
+    resolved_agent = (agent or DEFAULT_AGENT).lower()
+    if resolved_agent not in KNOWN_AGENTS:
+        known = ", ".join(sorted(KNOWN_AGENTS))
+        raise ValueError(
+            f"Unknown agent {resolved_agent!r}; choose from {known}, or pass --dest for a custom path"
+        )
+    if local:
+        base = Path.cwd() / f".{resolved_agent}" / "skills"
+    else:
+        base = KNOWN_AGENTS[resolved_agent]()
+    return base / SKILL_DIR_NAME
 
 
 def default_ref() -> str:

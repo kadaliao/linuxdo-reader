@@ -27,11 +27,29 @@ curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/instal
 
 安装脚本需要本机已有 `uv`，不需要 `git clone`。
 
+默认把 Skill 装到 Codex 的 `~/.codex/skills/linuxdo-reader`。你可以指定装给哪个助手，或装到当前项目目录：
+
+```bash
+# 装给 Claude（~/.claude/skills/linuxdo-reader）
+curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash -s -- --agent claude
+
+# 装到当前目录的 ./.claude/skills/linuxdo-reader（项目级 Skill）
+curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash -s -- --agent claude --local
+
+# 装到自定义路径
+curl -fsSL https://raw.githubusercontent.com/kadaliao/linuxdo-reader/main/install.sh | bash -s -- --dest /path/to/skills/linuxdo-reader
+```
+
 如果你已经装好了辅助 CLI，只想安装或更新 Skill：
 
 ```bash
-linuxdo-reader install-skill --force
+linuxdo-reader install-skill --force                    # 默认 Codex
+linuxdo-reader install-skill --agent claude --force     # 装给 Claude
+linuxdo-reader install-skill --agent claude --local --force  # 装到当前项目 ./.claude/skills
+linuxdo-reader install-skill --dest /path/to/skill --force   # 自定义路径
 ```
+
+`--agent` 目前支持 `codex` 和 `claude`；`--dest` 会覆盖 `--agent`/`--local`。
 
 安装后重启你的 AI 助手，然后直接问：
 

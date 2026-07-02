@@ -12,9 +12,11 @@ Codex-specific. The Python package is the helper tool that Skill drives. When
 changing behavior, keep the Skill's documented workflow and the CLI in sync — the
 Skill tells the agent which commands to run and how to interpret their output.
 
-Note: `installer.default_skill_dest()` still defaults to Codex's `~/.codex/skills`
-(overridable via `CODEX_HOME` or the `--dest` flag) because that is a concrete
-install target; the Skill content itself is agent-agnostic.
+Note: `installer.resolve_skill_dest()` defaults to Codex's `~/.codex/skills`
+(the `--agent` flag also selects `claude` → `~/.claude/skills`; `--local`
+targets `./.<agent>/skills` in the cwd; `--dest` overrides everything; `CODEX_HOME`
+still moves the Codex root) because those are concrete install targets; the Skill
+content itself is agent-agnostic.
 
 The runtime entry point into the core is `linuxdo-reader` — the Typer CLI
 (`linuxdo_reader.cli:app`).

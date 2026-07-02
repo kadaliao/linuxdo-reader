@@ -165,3 +165,37 @@ def test_cli_install_skill_from_local_source(tmp_path) -> None:
     assert result.exit_code == 0
     assert f"Installed Skill to {dest}" in result.output
     assert (dest / "SKILL.md").exists()
+
+
+def test_cli_install_skill_local_agent_dir(tmp_path, monkeypatch) -> None:
+    source = tmp_path / "source" / "linuxdo-reader"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("# Linux.do Reader\n", encoding="utf-8")
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["install-skill", "--source", str(source), "--agent", "claude", "--local"],
+    )
+
+    expected = project / ".claude" / "skills" / "linuxdo-reader"
+    assert result.exit_code == 0
+    assert (expected / "SKILL.md").exists()
+
+
+def test_cli_install_skill_rejects_unknown_agent(tmp_path) -> None:
+    source = tmp_path / "source" / "linuxdo-reader"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("# Linux.do Reader\n", encoding="utf-8")
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["install-skill", "--source", str(source), "--agent", "gemini"],
+    )
+
+    assert result.exit_code == 1
+    assert "Unknown agent" in result.output
