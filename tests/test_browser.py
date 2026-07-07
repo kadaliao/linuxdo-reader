@@ -4,6 +4,8 @@ from linuxdo_reader.browser import (
     build_topic_url,
     export_context_cookies,
     fetch_topic_with_browser,
+    launch_proxy_options,
+    navigate_for_cookie_refresh,
     topics_from_browser_rows,
 )
 
@@ -72,3 +74,51 @@ def test_export_context_cookies_writes_linuxdo_cookies(tmp_path) -> None:
     cookies_file = export_context_cookies(FakeContext(), tmp_path / "cookies.txt")
 
     assert "_forum_session" in cookies_file.read_text(encoding="utf-8")
+
+
+def test_navigate_for_cookie_refresh_falls_back_after_connection_closed() -> None:
+    class FakePage:
+        def __init__(self) -> None:
+            self.urls = []
+
+        def goto(self, url, wait_until):
+            assert wait_until == "domcontentloaded"
+            self.urls.append(url)
+            if url.endswith("/top?period=daily"):
+                raise RuntimeError("Page.goto: net::ERR_CONNECTION_CLOSED")
+
+        def wait_for_timeout(self, timeout):
+            assert timeout == 2000
+
+    page = FakePage()
+
+    navigate_for_cookie_refresh(page)
+
+    assert page.urls == ["https://linux.do/top?period=daily", "https://linux.do/"]
+
+
+def test_navigate_for_cookie_refresh_reports_all_failed_urls() -> None:
+    class FakePage:
+        def goto(self, url, wait_until):
+            raise RuntimeError(f"Page.goto failed for {url}")
+
+        def wait_for_timeout(self, timeout):
+            raise AssertionError("should not wait after failed navigation")
+
+    try:
+        navigate_for_cookie_refresh(FakePage())
+    except RuntimeError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+    assert "https://linux.do/top?period=daily" in message
+    assert "https://linux.do/" in message
+    assert "https://linux.do/latest" in message
+
+
+def test_launch_proxy_options_builds_playwright_proxy() -> None:
+    assert launch_proxy_options(None) == {}
+    assert launch_proxy_options("http://127.0.0.1:7890") == {
+        "proxy": {"server": "http://127.0.0.1:7890"}
+    }

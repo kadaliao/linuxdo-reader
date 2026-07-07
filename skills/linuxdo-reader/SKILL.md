@@ -99,6 +99,9 @@ You may also use:
 export LINUXDO_READER_COOKIES_FILE=~/.config/linuxdo-reader/cookies.txt
 ```
 
+If browser mode cannot reach Linux.do and the user has a proxy, pass it with
+`--proxy http://HOST:PORT` or set `LINUXDO_READER_PROXY`.
+
 ## One Topic Workflow
 
 Cache one thread:

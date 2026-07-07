@@ -107,6 +107,19 @@ linuxdo-reader digest --limit 10
 export LINUXDO_READER_COOKIES_FILE=~/.config/linuxdo-reader/cookies.txt
 ```
 
+如果你的网络需要代理，给浏览器模式指定代理：
+
+```bash
+linuxdo-reader auth refresh --proxy http://127.0.0.1:7890
+linuxdo-reader --proxy http://127.0.0.1:7890 crawl --source top --period daily --limit 10 --prefer browser
+```
+
+也可以设置环境变量：
+
+```bash
+export LINUXDO_READER_PROXY=http://127.0.0.1:7890
+```
+
 工具不会直接读取 Chrome 或 Safari 的 cookies 数据库，只会使用你明确配置的 cookies 文件，或者通过自己的 Playwright profile 刷新出来的 cookies。
 
 ## Skill 工作流

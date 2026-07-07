@@ -20,12 +20,14 @@ class LinuxDoService:
         browser_fetcher: Callable[[int], list[Post]] | None = None,
         browser_top_fetcher: Callable[[str, int], list[Topic]] | None = None,
         cookies_file: str | None = None,
+        proxy: str | None = None,
     ) -> None:
         self.store = store
         self.client = client or LinuxDoClient(cookies_file=cookies_file)
         self.browser_fetcher = browser_fetcher
         self.browser_top_fetcher = browser_top_fetcher
         self.cookies_file = cookies_file
+        self.proxy = proxy
 
     def refresh_top(self, period: str = "daily", limit: int = 20) -> list[Topic]:
         topics = self.client.fetch_top(period=period)[:limit]
@@ -118,7 +120,11 @@ class LinuxDoService:
             return self.browser_fetcher(topic_id)
         from .browser import fetch_topic_posts_with_browser
 
-        return fetch_topic_posts_with_browser(topic_id, cookies_file=self.cookies_file)
+        return fetch_topic_posts_with_browser(
+            topic_id,
+            cookies_file=self.cookies_file,
+            proxy=self.proxy,
+        )
 
     def _fetch_top_browser(self, period: str, limit: int) -> list[Topic]:
         if self.browser_top_fetcher:
@@ -129,6 +135,7 @@ class LinuxDoService:
             period=period,
             limit=limit,
             cookies_file=self.cookies_file,
+            proxy=self.proxy,
         )
 
 

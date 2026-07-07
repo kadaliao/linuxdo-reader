@@ -54,8 +54,16 @@ def main(
             help="Netscape cookies.txt file for linux.do.",
         ),
     ] = None,
+    proxy: Annotated[
+        str | None,
+        typer.Option(
+            "--proxy",
+            envvar="LINUXDO_READER_PROXY",
+            help="Proxy server for browser mode, for example http://127.0.0.1:7890.",
+        ),
+    ] = None,
 ) -> None:
-    ctx.obj = {"db": db, "cookies_file": cookies_file}
+    ctx.obj = {"db": db, "cookies_file": cookies_file, "proxy": proxy}
 
 
 @app.command("refresh")
@@ -67,7 +75,11 @@ def refresh(
 ) -> None:
     def action() -> list:
         with Store(ctx.obj["db"]) as store:
-            service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
+            service = LinuxDoService(
+                store,
+                cookies_file=ctx.obj["cookies_file"],
+                proxy=ctx.obj["proxy"],
+            )
             return (
                 service.refresh_latest(limit=limit)
                 if source == "latest"
@@ -86,7 +98,11 @@ def hydrate(
 ) -> None:
     def action() -> list:
         with Store(ctx.obj["db"]) as store:
-            service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
+            service = LinuxDoService(
+                store,
+                cookies_file=ctx.obj["cookies_file"],
+                proxy=ctx.obj["proxy"],
+            )
             return service.hydrate_topic(topic, prefer=prefer)
 
     posts = _run_cli(action)
@@ -103,7 +119,11 @@ def crawl(
 ) -> None:
     def action() -> dict[int, int]:
         with Store(ctx.obj["db"]) as store:
-            service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
+            service = LinuxDoService(
+                store,
+                cookies_file=ctx.obj["cookies_file"],
+                proxy=ctx.obj["proxy"],
+            )
             if source == "latest":
                 topics = service.refresh_latest(limit=limit)
                 return {
@@ -136,7 +156,11 @@ def digest(
     ] = 50,
 ) -> None:
     with Store(ctx.obj["db"]) as store:
-        service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
+        service = LinuxDoService(
+            store,
+            cookies_file=ctx.obj["cookies_file"],
+            proxy=ctx.obj["proxy"],
+        )
         rendered = service.render_daily_from_cache(
             limit=limit,
             comments_per_topic=comments_per_topic,
@@ -155,7 +179,11 @@ def topic_digest(
     topic: Annotated[str, typer.Argument(help="Topic id or linux.do topic URL.")],
 ) -> None:
     with Store(ctx.obj["db"]) as store:
-        service = LinuxDoService(store, cookies_file=ctx.obj["cookies_file"])
+        service = LinuxDoService(
+            store,
+            cookies_file=ctx.obj["cookies_file"],
+            proxy=ctx.obj["proxy"],
+        )
         typer.echo(service.render_topic_from_cache(topic))
 
 
@@ -243,10 +271,18 @@ def auth_login(
         Path,
         typer.Option("--cookies-file", help="Where to write linux.do cookies."),
     ] = default_cookies_file(),
+    proxy: Annotated[
+        str | None,
+        typer.Option(
+            "--proxy",
+            envvar="LINUXDO_READER_PROXY",
+            help="Proxy server for browser mode, for example http://127.0.0.1:7890.",
+        ),
+    ] = None,
 ) -> None:
     from .browser import refresh_cookies_with_browser
 
-    path = _run_cli(lambda: refresh_cookies_with_browser(cookies_file=cookies_file))
+    path = _run_cli(lambda: refresh_cookies_with_browser(cookies_file=cookies_file, proxy=proxy))
     typer.echo(f"Saved cookies to {path}")
 
 
@@ -256,9 +292,17 @@ def auth_refresh(
         Path,
         typer.Option("--cookies-file", help="Where to write linux.do cookies."),
     ] = default_cookies_file(),
+    proxy: Annotated[
+        str | None,
+        typer.Option(
+            "--proxy",
+            envvar="LINUXDO_READER_PROXY",
+            help="Proxy server for browser mode, for example http://127.0.0.1:7890.",
+        ),
+    ] = None,
 ) -> None:
     """Alias for `auth login`."""
-    auth_login(cookies_file=cookies_file)
+    auth_login(cookies_file=cookies_file, proxy=proxy)
 
 
 @app.command("seed-sample", hidden=True)

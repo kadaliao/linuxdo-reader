@@ -21,6 +21,12 @@ PLAYWRIGHT_INSTALL_HINT = (
     "In a source checkout, run `uv pip install playwright && uv run playwright install chromium`."
 )
 
+COOKIE_REFRESH_URLS = [
+    "https://linux.do/top?period=daily",
+    "https://linux.do/",
+    "https://linux.do/latest",
+]
+
 
 def build_topic_url(topic: str) -> str:
     if topic.startswith("https://linux.do/t/"):
@@ -61,6 +67,7 @@ def fetch_top_topics_with_browser(
     limit: int = 10,
     headless: bool = False,
     cookies_file: str | Path | None = None,
+    proxy: str | None = None,
     status_callback: Callable[[str], None] | None = None,
 ) -> list[Topic]:
     """Fetch the top topic list from the rendered Discourse page."""
@@ -72,7 +79,10 @@ def fetch_top_topics_with_browser(
     url = f"https://linux.do/top?period={period}"
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=headless)
+            browser = playwright.chromium.launch(
+                headless=headless,
+                **launch_proxy_options(proxy),
+            )
             context = browser.new_context()
             _add_context_cookies(context, cookies_file)
             page = context.new_page()
@@ -118,6 +128,7 @@ def refresh_cookies_with_browser(
     cookies_file: str | Path,
     profile_dir: str | Path | None = None,
     headless: bool = False,
+    proxy: str | None = None,
     status_callback: Callable[[str], None] | None = None,
 ) -> Path:
     """Open Linux.do with a persistent browser profile and export cookies."""
@@ -133,11 +144,14 @@ def refresh_cookies_with_browser(
             context = playwright.chromium.launch_persistent_context(
                 str(profile_path),
                 headless=headless,
+                **launch_proxy_options(proxy),
             )
             page = context.pages[0] if context.pages else context.new_page()
-            _status(status_callback, "Opening https://linux.do/top?period=daily")
-            page.goto("https://linux.do/top?period=daily", wait_until="domcontentloaded")
-            page.wait_for_timeout(2000)
+            try:
+                navigate_for_cookie_refresh(page, status_callback=status_callback)
+            except RuntimeError:
+                if not context.cookies(["https://linux.do"]):
+                    raise
             path = export_context_cookies(context, cookies_file)
             context.close()
             return path
@@ -150,6 +164,7 @@ def fetch_topic_posts_with_browser(
     chunk_size: int = 20,
     headless: bool = False,
     cookies_file: str | Path | None = None,
+    proxy: str | None = None,
     status_callback: Callable[[str], None] | None = None,
 ) -> list[Post]:
     """Fetch topic posts through a real browser session.
@@ -166,7 +181,10 @@ def fetch_topic_posts_with_browser(
     url = build_topic_url(str(topic))
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=headless)
+            browser = playwright.chromium.launch(
+                headless=headless,
+                **launch_proxy_options(proxy),
+            )
             context = browser.new_context()
             _add_context_cookies(context, cookies_file)
             page = context.new_page()
@@ -231,6 +249,33 @@ def topics_from_browser_rows(rows: list[object], source: str) -> list[Topic]:
 def export_context_cookies(context: Any, cookies_file: str | Path) -> Path:
     cookies = context.cookies(["https://linux.do"])
     return write_netscape_cookies(cookies_file, cookies)
+
+
+def launch_proxy_options(proxy: str | None) -> dict[str, dict[str, str]]:
+    if not proxy:
+        return {}
+    return {"proxy": {"server": proxy}}
+
+
+def navigate_for_cookie_refresh(
+    page: Any,
+    status_callback: Callable[[str], None] | None = None,
+    urls: list[str] | None = None,
+) -> None:
+    errors: list[str] = []
+    for url in urls or COOKIE_REFRESH_URLS:
+        try:
+            _status(status_callback, f"Opening {url}")
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
+            return
+        except Exception as exc:
+            errors.append(f"{url}: {exc}")
+    raise RuntimeError(
+        "Could not open Linux.do to refresh cookies. Tried "
+        + "; ".join(errors)
+        + ". If you use a proxy, pass --proxy http://HOST:PORT or set LINUXDO_READER_PROXY."
+    )
 
 
 def _add_context_cookies(context: Any, cookies_file: str | Path | None) -> None:
