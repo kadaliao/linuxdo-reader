@@ -69,9 +69,10 @@ def test_service_crawl_top_hydrates_each_refreshed_topic(tmp_path) -> None:
         browser_fetcher=lambda topic_id: [service.make_post_for_tests(topic_id, 1, "楼层")],
     )
 
-    report = service.crawl_top(period="daily", limit=2, prefer="browser")
+    report = service.crawl_top(period="daily", limit=2, prefer="browser", delay=0)
 
-    assert report == {2491173: 1, 2489984: 1}
+    assert report.counts == {2491173: 1, 2489984: 1}
+    assert report.errors == {}
     assert len(store.list_posts(2491173)) == 1
     assert len(store.list_posts(2489984)) == 1
 
@@ -91,10 +92,47 @@ def test_service_crawl_top_uses_browser_topic_list_when_feeds_fail(tmp_path) -> 
         browser_fetcher=lambda topic_id: [service.make_post_for_tests(topic_id, 1, "楼层")],
     )
 
-    report = service.crawl_top(period="daily", limit=2, prefer="browser")
+    report = service.crawl_top(period="daily", limit=2, prefer="browser", delay=0)
 
-    assert report == {2491173: 1, 2489984: 1}
+    assert report.counts == {2491173: 1, 2489984: 1}
     assert {topic.topic_id for topic in store.list_topics(limit=2)} == {2491173, 2489984}
+
+
+@respx.mock
+def test_service_crawl_top_continues_past_failed_topics(tmp_path) -> None:
+    respx.get("https://linux.do/top.rss").mock(return_value=httpx.Response(200, text=LATEST_RSS))
+
+    def browser_fetcher(topic_id: int):
+        if topic_id == 2491173:
+            raise RuntimeError("Cloudflare blocked this one")
+        return [service.make_post_for_tests(topic_id, 1, "楼层")]
+
+    store = Store(tmp_path / "linuxdo.sqlite")
+    service = LinuxDoService(store=store, browser_fetcher=browser_fetcher)
+
+    report = service.crawl_top(period="daily", limit=2, prefer="browser", delay=0)
+
+    assert report.counts == {2489984: 1}
+    assert list(report.errors) == [2491173]
+    assert "Cloudflare" in report.errors[2491173]
+    assert len(store.list_posts(2489984)) == 1
+
+
+@respx.mock
+def test_service_crawl_latest_hydrates_each_topic(tmp_path) -> None:
+    respx.get("https://linux.do/latest.rss").mock(
+        return_value=httpx.Response(200, text=LATEST_RSS)
+    )
+    store = Store(tmp_path / "linuxdo.sqlite")
+    service = LinuxDoService(
+        store=store,
+        browser_fetcher=lambda topic_id: [service.make_post_for_tests(topic_id, 1, "楼层")],
+    )
+
+    report = service.crawl_latest(limit=2, prefer="browser", delay=0)
+
+    assert report.counts == {2491173: 1, 2489984: 1}
+    assert report.errors == {}
 
 
 def test_service_renders_digest_from_cache(tmp_path) -> None:

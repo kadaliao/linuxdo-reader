@@ -193,9 +193,15 @@ Linux.do 的读取有一些现实约束：
 - 单帖 RSS 往往只暴露最近一段楼层。
 - 匿名 JSON 或 RSS 可能被 Cloudflare 或 Discourse 频控拦截。
 - 浏览器模式是个人阅读场景下的正常 fallback。
-- 浏览器模式里 JSON 也失败时，工具会退到渲染页面文本，让 digest 至少包含可见评论内容。
+- 浏览器模式里 JSON 也失败时，工具会滚动渲染页并收集可见楼层文本，让 digest 至少包含可见评论内容。
 
-如果 `refresh` 或 `crawl` 不能通过 RSS 读取每日热门，客户端会尝试 `/top.rss?period=<period>` 和 `/top/<period>.rss`。使用 `--prefer browser` 时，还可以退到渲染后的 `/top?period=<period>` 页面。
+单帖 JSON 抓取按这个顺序拿"尽可能全"的楼层：先试 `?print=true`（一次拿到更多楼层），被频控就退回普通 topic JSON 并按 `post_ids` 分页抓完整楼层流；遇到 429 会按 `Retry-After` 等待重试；分页中途失败时保留已抓到的楼层而不是整体作废。只有 JSON 完全不可用才退到 RSS 的"最近楼层窗口"（此时 CLI 会在 stderr 提示）。
+
+`crawl` 逐帖抓取时单帖失败不会中断整轮：成功的帖子照常缓存，失败的帖子在 stderr 里报告。帖与帖之间默认间隔 0.5 秒（`--delay` 可调）以缓解频控。
+
+如果 `refresh` 或 `crawl` 不能通过 RSS 读取每日热门，客户端会尝试 `/top.rss?period=<period>` 和 `/top/<period>.rss`（Cloudflare 返回 HTML 挑战页也会被识别为失败并尝试下一个路径）。使用 `--prefer browser` 时，还可以退到渲染后的 `/top?period=<period>` 页面。
+
+`digest` 从缓存渲染时优先展示最近一次刷新批次里的帖子（批次内按热度排序），避免几天前的老热帖一直霸榜。
 
 ## 仓库结构
 

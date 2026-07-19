@@ -5,7 +5,9 @@ from linuxdo_reader.browser import (
     export_context_cookies,
     fetch_topic_with_browser,
     launch_proxy_options,
+    merge_rendered_rows,
     navigate_for_cookie_refresh,
+    rendered_rows_to_posts,
     topics_from_browser_rows,
 )
 
@@ -115,6 +117,46 @@ def test_navigate_for_cookie_refresh_reports_all_failed_urls() -> None:
     assert "https://linux.do/top?period=daily" in message
     assert "https://linux.do/" in message
     assert "https://linux.do/latest" in message
+
+
+def test_merge_rendered_rows_accumulates_across_scroll_rounds() -> None:
+    collected: dict = {}
+
+    merge_rendered_rows(
+        collected,
+        [
+            {"postId": "1", "postNumber": "1", "author": "a", "text": "首帖"},
+            {"postId": "2", "postNumber": "2", "author": "b", "text": "短"},
+        ],
+    )
+    merge_rendered_rows(
+        collected,
+        [
+            {"postId": "2", "postNumber": "2", "author": "b", "text": "更长的完整楼层文本"},
+            {"postId": "3", "postNumber": "3", "author": "c", "text": "后来滚动加载的楼层"},
+            "not-a-dict",
+            {"postId": "4", "postNumber": "4", "author": "d", "text": ""},
+        ],
+    )
+
+    assert set(collected) == {"id:1", "id:2", "id:3"}
+    assert collected["id:2"]["text"] == "更长的完整楼层文本"
+
+
+def test_rendered_rows_to_posts_orders_floors_and_avoids_number_collisions() -> None:
+    posts = rendered_rows_to_posts(
+        [
+            {"postId": "20", "postNumber": "2", "author": "b", "text": "二楼"},
+            {"postId": "10", "postNumber": "1", "author": "a", "text": "首帖"},
+            {"postId": "", "postNumber": "", "author": "c", "text": "无楼号的可见样本"},
+        ],
+        topic_id=2489984,
+    )
+
+    assert [post.post_number for post in posts] == [1, 2, 3]
+    assert posts[0].text == "首帖"
+    assert posts[2].post_id == "rendered-3"
+    assert all(post.source == "browser:page" for post in posts)
 
 
 def test_launch_proxy_options_builds_playwright_proxy() -> None:

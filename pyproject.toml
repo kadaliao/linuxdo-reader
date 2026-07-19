@@ -1,6 +1,6 @@
 [project]
 name = "linuxdo-reader"
-version = "0.1.4"
+version = "0.2.0"
 description = "Skill helper for reading Linux.do topics and discussion floors"
 readme = "README.md"
 authors = [

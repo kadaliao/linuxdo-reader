@@ -89,3 +89,15 @@ def test_install_skill_from_directory_force_replaces_existing_dest(tmp_path) -> 
     install_skill_from_directory(source, dest, force=True)
 
     assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# New\n"
+
+
+def test_package_version_matches_pyproject() -> None:
+    import tomllib
+    from pathlib import Path
+
+    from linuxdo_reader import __version__
+
+    pyproject = Path(__file__).parents[1] / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+
+    assert data["project"]["version"] == __version__

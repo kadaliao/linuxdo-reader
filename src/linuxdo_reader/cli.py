@@ -8,7 +8,7 @@ import httpx
 import typer
 
 from .cookies import default_cookies_file
-from .service import LinuxDoService
+from .service import CrawlReport, LinuxDoService
 from .storage import Store
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
@@ -22,6 +22,8 @@ app.add_typer(auth_app, name="auth")
 
 T = TypeVar("T")
 
+PREFER_CHOICES = ("json", "rss", "browser")
+
 
 def default_db_path() -> Path:
     return Path.home() / ".local" / "share" / "linuxdo-reader" / "linuxdo.sqlite"
@@ -30,6 +32,11 @@ def default_db_path() -> Path:
 def _fail(message: str) -> NoReturn:
     typer.echo(f"Error: {message}", err=True)
     raise typer.Exit(1)
+
+
+def _validate_prefer(prefer: str) -> None:
+    if prefer not in PREFER_CHOICES:
+        _fail(f"Unknown --prefer value {prefer!r}. Choose from: {', '.join(PREFER_CHOICES)}.")
 
 
 def _run_cli(action: Callable[[], T]) -> T:
@@ -63,6 +70,10 @@ def main(
         ),
     ] = None,
 ) -> None:
+    if cookies_file is None:
+        default_cookies = default_cookies_file()
+        if default_cookies.exists():
+            cookies_file = default_cookies
     ctx.obj = {"db": db, "cookies_file": cookies_file, "proxy": proxy}
 
 
@@ -96,6 +107,8 @@ def hydrate(
     topic: Annotated[str, typer.Argument(help="Topic id or linux.do topic URL.")],
     prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
 ) -> None:
+    _validate_prefer(prefer)
+
     def action() -> list:
         with Store(ctx.obj["db"]) as store:
             service = LinuxDoService(
@@ -107,6 +120,12 @@ def hydrate(
 
     posts = _run_cli(action)
     typer.echo(f"Cached {len(posts)} posts.")
+    if prefer == "json" and posts and all(post.source == "rss" for post in posts):
+        typer.echo(
+            "Note: JSON fetch failed, so this is the RSS window only "
+            "(recent posts, not full history). Try --prefer browser for all floors.",
+            err=True,
+        )
 
 
 @app.command("crawl")
@@ -116,8 +135,14 @@ def crawl(
     period: Annotated[str, typer.Option("--period", help="Top period")] = "daily",
     limit: Annotated[int, typer.Option("--limit", min=1, max=50)] = 10,
     prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
+    delay: Annotated[
+        float,
+        typer.Option("--delay", min=0.0, max=30.0, help="Pause between topics in seconds."),
+    ] = 0.5,
 ) -> None:
-    def action() -> dict[int, int]:
+    _validate_prefer(prefer)
+
+    def action() -> CrawlReport:
         with Store(ctx.obj["db"]) as store:
             service = LinuxDoService(
                 store,
@@ -125,16 +150,16 @@ def crawl(
                 proxy=ctx.obj["proxy"],
             )
             if source == "latest":
-                topics = service.refresh_latest(limit=limit)
-                return {
-                    topic.topic_id: len(service.hydrate_topic(topic.topic_id, prefer=prefer))
-                    for topic in topics
-                }
-            return service.crawl_top(period=period, limit=limit, prefer=prefer)
+                return service.crawl_latest(limit=limit, prefer=prefer, delay=delay)
+            return service.crawl_top(period=period, limit=limit, prefer=prefer, delay=delay)
 
     report = _run_cli(action)
-    for topic_id, count in report.items():
+    for topic_id, count in report.counts.items():
         typer.echo(f"{topic_id}: cached {count} posts")
+    for topic_id, error in report.errors.items():
+        typer.echo(f"{topic_id}: failed ({error})", err=True)
+    if report.errors and not report.counts:
+        _fail("All topics failed to hydrate.")
 
 
 @app.command("digest")

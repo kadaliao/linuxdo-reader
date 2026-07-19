@@ -59,7 +59,7 @@ def parse_topic_feed(xml_text: str, topic_id: int) -> list[Post]:
                 source="rss",
             )
         )
-    return posts
+    return sorted(posts, key=lambda post: post.post_number)
 
 
 def topic_id_from_url(url: str) -> int | None:
