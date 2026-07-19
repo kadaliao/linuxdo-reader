@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
@@ -10,6 +12,14 @@ from .digest import render_daily_digest, render_topic_digest
 from .feeds import parse_topic_list_feed, topic_id_from_url
 from .models import Post, Topic
 from .storage import Store
+
+
+@dataclass(frozen=True)
+class CrawlReport:
+    """Per-topic hydration outcome for a crawl run."""
+
+    counts: dict[int, int] = field(default_factory=dict)
+    errors: dict[int, str] = field(default_factory=dict)
 
 
 class LinuxDoService:
@@ -79,16 +89,30 @@ class LinuxDoService:
             comments_per_topic=comments_per_topic,
         )
 
-    def write_daily_digest(self, output: str | Path, limit: int = 10) -> Path:
+    def write_daily_digest(
+        self,
+        output: str | Path,
+        limit: int = 10,
+        comments_per_topic: int = 50,
+    ) -> Path:
         path = Path(output)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.render_daily_from_cache(limit=limit), encoding="utf-8")
+        path.write_text(
+            self.render_daily_from_cache(limit=limit, comments_per_topic=comments_per_topic),
+            encoding="utf-8",
+        )
         return path
 
     def parse_topics_for_tests(self, rss_text: str) -> list[Topic]:
         return parse_topic_list_feed(rss_text, source="sample")
 
-    def crawl_top(self, period: str = "daily", limit: int = 10, prefer: str = "json") -> dict[int, int]:
+    def crawl_top(
+        self,
+        period: str = "daily",
+        limit: int = 10,
+        prefer: str = "json",
+        delay: float = 0.5,
+    ) -> CrawlReport:
         try:
             topics = self.refresh_top(period=period, limit=limit)
         except httpx.HTTPError:
@@ -96,11 +120,31 @@ class LinuxDoService:
                 raise
             topics = self._fetch_top_browser(period=period, limit=limit)
             self.store.upsert_topics(topics)
-        report: dict[int, int] = {}
-        for topic in topics:
-            posts = self.hydrate_topic(topic.topic_id, prefer=prefer)
-            report[topic.topic_id] = len(posts)
-        return report
+        return self._hydrate_topics(topics, prefer=prefer, delay=delay)
+
+    def crawl_latest(
+        self,
+        limit: int = 20,
+        prefer: str = "json",
+        delay: float = 0.5,
+        order: str | None = None,
+    ) -> CrawlReport:
+        topics = self.refresh_latest(limit=limit, order=order)
+        return self._hydrate_topics(topics, prefer=prefer, delay=delay)
+
+    def _hydrate_topics(self, topics: list[Topic], prefer: str, delay: float) -> CrawlReport:
+        counts: dict[int, int] = {}
+        errors: dict[int, str] = {}
+        for index, topic in enumerate(topics):
+            if index and delay > 0:
+                time.sleep(delay)
+            try:
+                counts[topic.topic_id] = len(self.hydrate_topic(topic.topic_id, prefer=prefer))
+            except (httpx.HTTPError, RuntimeError) as exc:
+                # One rate-limited or blocked topic must not abort the crawl;
+                # keep hydrating the rest and report the failure.
+                errors[topic.topic_id] = str(exc)
+        return CrawlReport(counts=counts, errors=errors)
 
     def make_post_for_tests(self, topic_id: int, post_number: int, text: str) -> Post:
         return Post(

@@ -76,6 +76,27 @@ def test_render_topic_digest_shows_all_cached_floors_by_default() -> None:
     assert "未展示" not in rendered
 
 
+def test_render_topic_digest_falls_back_to_cached_floor_count() -> None:
+    topic = Topic(
+        topic_id=2489984,
+        title="囤囤鼠的末日",
+        url="https://linux.do/t/topic/2489984",
+        author="",
+        category="",
+        excerpt="",
+        published_at="",
+        source="manual",
+    )
+    posts = [
+        Post(2489984, str(number), number, f"user{number}", f"评论 {number}", "", "", "", "json")
+        for number in range(1, 6)
+    ]
+
+    rendered = render_topic_digest(topic, posts)
+
+    assert "热度：5 楼（含主贴）" in rendered
+
+
 def test_render_daily_digest_shows_configurable_cached_comments() -> None:
     topic = Topic(
         topic_id=2489984,

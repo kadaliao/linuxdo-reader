@@ -178,9 +178,26 @@ run `crawl` or `hydrate` first.
 If cached floors are `0`, explain that only topic metadata has been refreshed.
 Run `hydrate <topic>` or `crawl`.
 
+`hydrate` fetches JSON in this order: `?print=true`, then plain topic JSON with
+chunked `post_ids` pagination (both walk the full floor stream), then RSS as
+the last resort. When it had to settle for the RSS window, the CLI prints a
+stderr note — relay that limitation instead of presenting the floors as
+complete. A partial JSON crawl (pagination interrupted mid-topic) is kept and
+cached; it is still much more complete than RSS.
+
+`crawl` does not stop when one topic fails: successful topics report
+`<id>: cached N posts` on stdout and failed ones report `<id>: failed (...)` on
+stderr. Summarize the successes and mention the failures; rerun later or use
+`--prefer browser` for the failed ones. `--delay` (default 0.5s) spaces out
+per-topic requests to ease rate limits.
+
 If a topic shows 134 floors but only 25 are cached, explain that RSS likely
 returned a recent window and anonymous JSON may have been blocked. Use
 `--prefer browser` when feasible.
+
+`digest` orders topics by the most recent refresh batch first (hottest first
+within the batch), so run `refresh`/`crawl` before digesting to get today's
+list rather than previously cached days.
 
 If `refresh` or `crawl --source top` fails, note that the helper tries both
 `/top.rss?period=<period>` and `/top/<period>.rss` with a short retry. If both

@@ -71,6 +71,58 @@ def test_fetch_topic_full_uses_print_json_then_post_ids() -> None:
 
 
 @respx.mock
+def test_fetch_topic_json_falls_back_from_print_to_plain_json() -> None:
+    def topic_json_handler(request):
+        if "print" in str(request.url):
+            return httpx.Response(429, headers={"Retry-After": "1"})
+        return httpx.Response(200, json=TOPIC_JSON)
+
+    respx.get("https://linux.do/t/-/2489984.json").mock(side_effect=topic_json_handler)
+    respx.get("https://linux.do/t/2489984/posts.json").mock(
+        return_value=httpx.Response(200, json=POSTS_JSON)
+    )
+
+    client = LinuxDoClient()
+    sleeps: list[float] = []
+    client._sleep = sleeps.append
+
+    posts = client.fetch_topic_json(2489984)
+
+    assert [post.post_number for post in posts] == [1, 2, 3]
+    # 429 on print mode is retried with Retry-After before switching to plain JSON.
+    assert sleeps == [1.0, 1.0]
+
+
+@respx.mock
+def test_fetch_topic_json_keeps_partial_posts_when_pagination_fails() -> None:
+    respx.get("https://linux.do/t/-/2489984.json").mock(
+        return_value=httpx.Response(200, json=TOPIC_JSON)
+    )
+    respx.get("https://linux.do/t/2489984/posts.json").mock(return_value=httpx.Response(500))
+
+    client = LinuxDoClient()
+    posts = client.fetch_topic_json(2489984)
+
+    assert [post.post_number for post in posts] == [1]
+    assert posts[0].source == "json"
+
+
+@respx.mock
+def test_fetch_top_treats_cloudflare_html_as_feed_failure() -> None:
+    respx.get("https://linux.do/top.rss").mock(
+        return_value=httpx.Response(200, text="<html><body>Just a moment...</body></html>")
+    )
+    respx.get("https://linux.do/top/daily.rss").mock(
+        return_value=httpx.Response(200, text=LATEST_RSS)
+    )
+
+    client = LinuxDoClient()
+    topics = client.fetch_top("daily")
+
+    assert [topic.topic_id for topic in topics] == [2491173, 2489984]
+
+
+@respx.mock
 def test_client_sends_configured_cookies_file(tmp_path) -> None:
     cookies_file = tmp_path / "cookies.txt"
     cookies_file.write_text(

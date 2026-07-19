@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from linuxdo_reader.cli import app
 
-from .fixtures import LATEST_RSS
+from .fixtures import LATEST_RSS, POSTS_JSON, TOPIC_JSON, TOPIC_RSS
 
 
 def test_cli_digest_reads_cache(tmp_path) -> None:
@@ -123,6 +123,76 @@ def test_cli_refresh_uses_configured_cookies_file(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert route.calls.last.request.headers["cookie"] == "_cf_bm=abc"
+
+
+@respx.mock
+def test_cli_uses_default_cookies_file_when_present(tmp_path, monkeypatch) -> None:
+    cookies_file = tmp_path / "cookies.txt"
+    cookies_file.write_text(
+        "# Netscape HTTP Cookie File\n"
+        ".linux.do\tTRUE\t/\tTRUE\t2147483647\t_forum_session\txyz\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("linuxdo_reader.cli.default_cookies_file", lambda: cookies_file)
+    route = respx.get("https://linux.do/top.rss").mock(
+        return_value=httpx.Response(200, text=LATEST_RSS)
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["--db", str(tmp_path / "linuxdo.sqlite"), "refresh"])
+
+    assert result.exit_code == 0
+    assert route.calls.last.request.headers["cookie"] == "_forum_session=xyz"
+
+
+@respx.mock
+def test_cli_crawl_reports_partial_failures_and_keeps_going(tmp_path) -> None:
+    respx.get("https://linux.do/top.rss").mock(return_value=httpx.Response(200, text=LATEST_RSS))
+    respx.get("https://linux.do/t/-/2489984.json").mock(
+        return_value=httpx.Response(200, json=TOPIC_JSON)
+    )
+    respx.get("https://linux.do/t/2489984/posts.json").mock(
+        return_value=httpx.Response(200, json=POSTS_JSON)
+    )
+    respx.get("https://linux.do/t/-/2491173.json").mock(return_value=httpx.Response(403))
+    respx.get("https://linux.do/t/topic/2491173.rss").mock(return_value=httpx.Response(403))
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["--db", str(tmp_path / "linuxdo.sqlite"), "crawl", "--limit", "2", "--delay", "0"],
+    )
+
+    assert result.exit_code == 0
+    assert "2489984: cached 3 posts" in result.output
+    assert "2491173: failed" in result.output
+
+
+def test_cli_rejects_unknown_prefer_value(tmp_path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["--db", str(tmp_path / "linuxdo.sqlite"), "hydrate", "123", "--prefer", "browsr"],
+    )
+
+    assert result.exit_code == 1
+    assert "Unknown --prefer value" in result.output
+
+
+@respx.mock
+def test_cli_hydrate_notes_rss_window_after_json_failure(tmp_path) -> None:
+    respx.get("https://linux.do/t/-/2489984.json").mock(return_value=httpx.Response(403))
+    respx.get("https://linux.do/t/topic/2489984.rss").mock(
+        return_value=httpx.Response(200, text=TOPIC_RSS)
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["--db", str(tmp_path / "linuxdo.sqlite"), "hydrate", "2489984"])
+
+    assert result.exit_code == 0
+    assert "Cached 2 posts." in result.output
+    assert "RSS window" in result.output
 
 
 def test_cli_has_auth_commands() -> None:

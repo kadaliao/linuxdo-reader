@@ -212,7 +212,11 @@ def fetch_topic_posts_with_browser(
                             seen_ids.add(post.post_id)
             except Exception:
                 _status(status_callback, "Falling back to rendered page text")
-                posts = _page_posts_from_rendered_topic(page, topic_id)
+                posts = _page_posts_from_rendered_topic(
+                    page,
+                    topic_id,
+                    status_callback=status_callback,
+                )
             context.close()
             browser.close()
     except Exception as exc:
@@ -313,47 +317,100 @@ def _page_fetch_json(page: Any, path: str) -> dict[str, Any]:
     return result
 
 
-def _page_posts_from_rendered_topic(page: Any, topic_id: int) -> list[Post]:
-    rows = page.evaluate(
-        """() => {
-            const selectors = [
-              "article[data-post-id]",
-              "article",
-              ".topic-post",
-              "[data-post-number]"
-            ];
-            const seen = new Set();
-            const posts = [];
-            for (const selector of selectors) {
-              for (const node of Array.from(document.querySelectorAll(selector))) {
-                const text = (node.innerText || "").replace(/\\s+/g, " ").trim();
-                if (!text || seen.has(text)) continue;
-                seen.add(text);
-                const postNumber =
-                  node.getAttribute("data-post-number") ||
-                  node.querySelector("[data-post-number]")?.getAttribute("data-post-number") ||
-                  "";
-                const postId =
-                  node.getAttribute("data-post-id") ||
-                  node.querySelector("[data-post-id]")?.getAttribute("data-post-id") ||
-                  "";
-                const author =
-                  node.querySelector("[data-user-card], .names a, .username")?.textContent?.trim() ||
-                  "";
-                posts.push({ postNumber, postId, author, text });
-              }
-            }
-            return posts;
-        }"""
-    )
-    posts: list[Post] = []
-    for index, row in enumerate(rows if isinstance(rows, list) else [], start=1):
+_RENDERED_POSTS_JS = """() => {
+    const selectors = [
+      "article[data-post-id]",
+      "article",
+      ".topic-post",
+      "[data-post-number]"
+    ];
+    const seen = new Set();
+    const posts = [];
+    for (const selector of selectors) {
+      for (const node of Array.from(document.querySelectorAll(selector))) {
+        const text = (node.innerText || "").replace(/\\s+/g, " ").trim();
+        if (!text || seen.has(text)) continue;
+        seen.add(text);
+        const postNumber =
+          node.getAttribute("data-post-number") ||
+          node.querySelector("[data-post-number]")?.getAttribute("data-post-number") ||
+          "";
+        const postId =
+          node.getAttribute("data-post-id") ||
+          node.querySelector("[data-post-id]")?.getAttribute("data-post-id") ||
+          "";
+        const author =
+          node.querySelector("[data-user-card], .names a, .username")?.textContent?.trim() ||
+          "";
+        posts.push({ postNumber, postId, author, text });
+      }
+    }
+    return posts;
+}"""
+
+
+def _page_posts_from_rendered_topic(
+    page: Any,
+    topic_id: int,
+    scroll_rounds: int = 12,
+    status_callback: Callable[[str], None] | None = None,
+) -> list[Post]:
+    # Discourse virtualizes the post stream: floors scroll out of the DOM as
+    # new ones load, so collect after every scroll round and merge.
+    collected: dict[str, dict[str, object]] = {}
+    for round_index in range(max(scroll_rounds, 1)):
+        rows = page.evaluate(_RENDERED_POSTS_JS)
+        before = len(collected)
+        merge_rendered_rows(collected, rows if isinstance(rows, list) else [])
+        if len(collected) > before:
+            _status(status_callback, f"Collected {len(collected)} rendered posts")
+        if round_index < scroll_rounds - 1:
+            page.mouse.wheel(0, 4000)
+            page.wait_for_timeout(600)
+    return rendered_rows_to_posts(list(collected.values()), topic_id)
+
+
+def merge_rendered_rows(
+    collected: dict[str, dict[str, object]],
+    rows: list[object],
+) -> dict[str, dict[str, object]]:
+    for row in rows:
         if not isinstance(row, dict):
             continue
-        text = str(row.get("text") or "").strip()
-        if not text:
+        key = _rendered_row_key(row)
+        if key is None:
             continue
-        post_number = _parse_count(row.get("postNumber")) or index
+        existing = collected.get(key)
+        if existing is None or len(str(row.get("text") or "")) > len(str(existing.get("text") or "")):
+            collected[key] = row
+    return collected
+
+
+def rendered_rows_to_posts(rows: list[object], topic_id: int) -> list[Post]:
+    numbered: list[tuple[int, dict[str, object]]] = []
+    unnumbered: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if not str(row.get("text") or "").strip():
+            continue
+        post_number = _parse_count(row.get("postNumber"))
+        if post_number:
+            numbered.append((post_number, row))
+        else:
+            unnumbered.append(row)
+    # Rows without a floor number get numbers past the highest real floor so
+    # they never collide with (and overwrite) genuine floors in the cache.
+    next_number = max((number for number, _ in numbered), default=0)
+    for row in unnumbered:
+        next_number += 1
+        numbered.append((next_number, row))
+    posts: list[Post] = []
+    seen_numbers: set[int] = set()
+    for post_number, row in sorted(numbered, key=lambda pair: pair[0]):
+        if post_number in seen_numbers:
+            continue
+        seen_numbers.add(post_number)
         post_id = str(row.get("postId") or f"rendered-{post_number}")
         posts.append(
             Post(
@@ -361,14 +418,27 @@ def _page_posts_from_rendered_topic(page: Any, topic_id: int) -> list[Post]:
                 post_id=post_id,
                 post_number=post_number,
                 author=str(row.get("author") or ""),
-                text=text,
-                cooked=text,
+                text=str(row.get("text") or "").strip(),
+                cooked=str(row.get("text") or "").strip(),
                 url=f"{canonical_topic_url(topic_id)}/{post_number}",
                 created_at="",
                 source="browser:page",
             )
         )
     return posts
+
+
+def _rendered_row_key(row: dict[str, object]) -> str | None:
+    text = str(row.get("text") or "").strip()
+    if not text:
+        return None
+    post_id = str(row.get("postId") or "").strip()
+    if post_id:
+        return f"id:{post_id}"
+    number = _parse_count(row.get("postNumber"))
+    if number:
+        return f"number:{number}"
+    return f"text:{text[:200]}"
 
 
 def _status(callback: Callable[[str], None] | None, message: str) -> None:

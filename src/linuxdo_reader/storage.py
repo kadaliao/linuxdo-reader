@@ -63,6 +63,13 @@ class Store:
 
     def upsert_posts(self, posts: list[Post]) -> None:
         with self._conn:
+            # A floor fetched via RSS carries a synthetic "<topic>-<number>"
+            # post_id while JSON/browser fetches carry the numeric Discourse
+            # id. Drop stale rows for the same floor so sources never stack.
+            self._conn.executemany(
+                "DELETE FROM posts WHERE topic_id = ? AND post_number = ? AND post_id <> ?",
+                [(post.topic_id, post.post_number, post.post_id) for post in posts],
+            )
             self._conn.executemany(
                 """
                 INSERT INTO posts (
@@ -100,7 +107,7 @@ class Store:
         rows = self._conn.execute(
             """
             SELECT * FROM topics
-            ORDER BY COALESCE(reply_count, 0) DESC, published_at DESC
+            ORDER BY updated_at DESC, COALESCE(reply_count, 0) DESC, published_at DESC
             LIMIT ?
             """,
             (limit,),

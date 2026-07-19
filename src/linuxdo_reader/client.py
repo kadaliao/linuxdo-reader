@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+import time
+import xml.etree.ElementTree as ET
+from collections.abc import Callable, Iterable
+from typing import TypeVar
 from urllib.parse import urlencode
 
 import httpx
@@ -8,6 +11,11 @@ import httpx
 from .cookies import load_cookie_jar
 from .feeds import canonical_topic_url, html_to_text, parse_topic_feed, parse_topic_list_feed
 from .models import Post, Topic
+
+T = TypeVar("T")
+
+RATE_LIMIT_MAX_WAIT = 10.0
+RATE_LIMIT_ATTEMPTS = 3
 
 
 class LinuxDoClient:
@@ -26,6 +34,7 @@ class LinuxDoClient:
             follow_redirects=True,
             cookies=load_cookie_jar(cookies_file),
         )
+        self._sleep: Callable[[float], None] = time.sleep
 
     def close(self) -> None:
         self._client.close()
@@ -37,58 +46,121 @@ class LinuxDoClient:
         self.close()
 
     def fetch_latest(self, order: str | None = None) -> list[Topic]:
-        path = "/latest.rss"
         params = {"order": order} if order else None
-        response = self._client.get(path, params=params)
-        response.raise_for_status()
-        return parse_topic_list_feed(response.text, source="latest")
+        return self._fetch_feed_with_fallbacks(
+            lambda text: parse_topic_list_feed(text, source="latest"),
+            ("/latest.rss", params),
+        )
 
     def fetch_top(self, period: str = "daily") -> list[Topic]:
-        response = self._get_with_fallbacks(
+        return self._fetch_feed_with_fallbacks(
+            lambda text: parse_topic_list_feed(text, source=f"top:{period}"),
             ("/top.rss", {"period": period}),
             (f"/top/{period}.rss", None),
         )
-        return parse_topic_list_feed(response.text, source=f"top:{period}")
 
     def fetch_topic_rss(self, topic_id: int) -> list[Post]:
         response = self._client.get(f"/t/topic/{topic_id}.rss")
         response.raise_for_status()
-        return parse_topic_feed(response.text, topic_id=topic_id)
+        try:
+            return parse_topic_feed(response.text, topic_id=topic_id)
+        except ET.ParseError as exc:
+            raise RuntimeError(
+                f"linux.do returned non-RSS content for topic {topic_id} "
+                "(Cloudflare challenge or rate limit?)"
+            ) from exc
 
     def fetch_topic_json(self, topic_id: int, chunk_size: int = 20) -> list[Post]:
-        topic_response = self._client.get(f"/t/-/{topic_id}.json", params={"print": "true"})
-        topic_response.raise_for_status()
-        topic_json = topic_response.json()
-        post_stream = topic_json.get("post_stream", {})
+        topic_json = self._fetch_topic_json_payload(topic_id)
+        post_stream = topic_json.get("post_stream") or {}
         stream = [int(post_id) for post_id in post_stream.get("stream", [])]
         posts = posts_from_json(topic_id, post_stream.get("posts", []), source="json")
         seen_ids = {post.post_id for post in posts}
         remaining = [post_id for post_id in stream if str(post_id) not in seen_ids]
         for chunk in _chunks(remaining, chunk_size):
             params = [("post_ids[]", str(post_id)) for post_id in chunk]
-            response = self._client.get(f"/t/{topic_id}/posts.json", params=params)
-            response.raise_for_status()
-            for item in response.json().get("post_stream", {}).get("posts", []):
+            try:
+                response = self._get_json_with_retry(f"/t/{topic_id}/posts.json", params=params)
+                payload = response.json()
+            except (httpx.HTTPError, ValueError):
+                # Keep the floors already fetched; a partial JSON crawl still
+                # beats falling back to the small RSS window.
+                break
+            for item in (payload.get("post_stream") or {}).get("posts", []):
                 post = _post_from_json(topic_id, item, source="json")
                 if post.post_id not in seen_ids:
                     posts.append(post)
                     seen_ids.add(post.post_id)
         return sorted(posts, key=lambda post: post.post_number)
 
-    def _get_with_fallbacks(
+    def _fetch_topic_json_payload(self, topic_id: int) -> dict[str, object]:
+        # print=true returns up to 1000 posts in one response but Discourse
+        # rate-limits it aggressively; the plain topic JSON still exposes the
+        # full post id stream for chunked pagination.
+        try:
+            response = self._get_json_with_retry(
+                f"/t/-/{topic_id}.json", params={"print": "true"}
+            )
+            payload = response.json()
+        except (httpx.HTTPError, ValueError):
+            response = self._get_json_with_retry(f"/t/-/{topic_id}.json")
+            payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError(f"Unexpected JSON payload for topic {topic_id}")
+        return payload
+
+    def _get_json_with_retry(
         self,
+        path: str,
+        params: object = None,
+        attempts: int = RATE_LIMIT_ATTEMPTS,
+    ) -> httpx.Response:
+        for attempt in range(attempts):
+            response = self._client.get(path, params=params)
+            if response.status_code == 429 and attempt < attempts - 1:
+                self._sleep(_retry_after_seconds(response, attempt))
+                continue
+            response.raise_for_status()
+            return response
+        raise httpx.HTTPError(f"Exhausted retries for {path}")
+
+    def _fetch_feed_with_fallbacks(
+        self,
+        parser: Callable[[str], list[T]],
         *requests: tuple[str, dict[str, str] | None],
         attempts: int = 2,
-    ) -> httpx.Response:
-        errors: list[tuple[str, httpx.HTTPError]] = []
+    ) -> list[T]:
+        errors: list[tuple[str, Exception]] = []
         for path, params in requests:
             for _ in range(attempts):
                 try:
                     response = self._client.get(path, params=params)
                     response.raise_for_status()
-                    return response
+                    parsed = parser(response.text)
                 except httpx.HTTPError as exc:
                     errors.append((_format_path(path, params), exc))
+                    continue
+                except ET.ParseError as exc:
+                    errors.append(
+                        (
+                            _format_path(path, params),
+                            RuntimeError(
+                                "non-RSS response, likely a Cloudflare challenge "
+                                f"or rate limit ({exc})"
+                            ),
+                        )
+                    )
+                    break
+                if parsed:
+                    return parsed
+                # An XHTML challenge page can parse as XML yet carry no items.
+                errors.append(
+                    (
+                        _format_path(path, params),
+                        RuntimeError("feed parsed but contained no items (challenge page?)"),
+                    )
+                )
+                break
         raise httpx.HTTPError(_format_fallback_errors(errors))
 
 
@@ -121,6 +193,15 @@ def _post_from_json(topic_id: int, item: dict[str, object], source: str) -> Post
     )
 
 
+def _retry_after_seconds(response: httpx.Response, attempt: int) -> float:
+    header = response.headers.get("Retry-After", "")
+    try:
+        seconds = float(header)
+    except ValueError:
+        seconds = 2.0 * (attempt + 1)
+    return max(0.5, min(seconds, RATE_LIMIT_MAX_WAIT))
+
+
 def _chunks(values: list[int], size: int) -> Iterable[list[int]]:
     for index in range(0, len(values), size):
         yield values[index : index + size]
@@ -132,7 +213,7 @@ def _format_path(path: str, params: dict[str, str] | None) -> str:
     return f"{path}?{urlencode(params)}"
 
 
-def _format_fallback_errors(errors: list[tuple[str, httpx.HTTPError]]) -> str:
+def _format_fallback_errors(errors: list[tuple[str, Exception]]) -> str:
     details = "; ".join(
         f"{path}: {type(error).__name__}: {error}" for path, error in errors
     )

@@ -51,14 +51,22 @@ Reading Linux.do is unreliable (Cloudflare / Discourse rate limits), so fetching
 is a deliberate fallback chain. Preserve this behavior when editing:
 
 - **Topic lists**: `fetch_top` tries `/top.rss?period=<p>` then `/top/<p>.rss`
-  (each with a short retry via `_get_with_fallbacks`); `--prefer browser` adds a
+  (each with a short retry via `_fetch_feed_with_fallbacks`, which also treats
+  Cloudflare HTML / empty feeds as failures); `--prefer browser` adds a
   rendered-page fallback in `crawl_top`.
-- **Single topic** (`hydrate_topic`): `prefer=json` → Discourse JSON, falling
-  back to RSS on error; `prefer=rss` → RSS only; `prefer=browser` → Playwright.
+- **Single topic** (`hydrate_topic`): `prefer=json` → Discourse JSON
+  (`?print=true` first, then plain topic JSON; both page the full stream via
+  `posts.json`, honor 429 `Retry-After`, and keep partial results if pagination
+  dies mid-topic), falling back to RSS on error; `prefer=rss` → RSS only;
+  `prefer=browser` → Playwright.
+- **Crawls** (`crawl_top` / `crawl_latest`): per-topic failures are collected in
+  `CrawlReport.errors` instead of aborting the run; a `delay` (default 0.5s)
+  spaces out topics.
 - **Browser mode** (`fetch_topic_posts_with_browser`): opens a real page, runs
   same-origin `fetch` for JSON inside the page, and if that fails falls back to
-  scraping rendered page text (`source="browser:page"`). Rendered-text posts are
-  visible samples, **not** guaranteed full history — the digest/Skill must say so.
+  scrolling the rendered page and collecting visible floors incrementally
+  (`source="browser:page"`). Rendered-text posts are visible samples, **not**
+  guaranteed full history — the digest/Skill must say so.
 
 The `source` field on every `Topic`/`Post` records where the data came from
 (`json`, `rss`, `browser`, `browser:page`, `top:daily`, etc.). Keep it accurate;
@@ -70,7 +78,12 @@ callers and the Skill reason about it.
 default) with two tables:
 
 - `topics` — keyed by `topic_id`; upserts refresh metadata + `updated_at`.
-- `posts` — keyed by `(topic_id, post_id)`; the discussion floors.
+  `list_topics` orders by `updated_at` first so the digest reflects the most
+  recent refresh batch, not all-time reply counts.
+- `posts` — keyed by `(topic_id, post_id)`; the discussion floors. Upserts also
+  drop rows with the same `(topic_id, post_number)` but a different `post_id`,
+  because RSS uses synthetic ids while JSON/browser use numeric Discourse ids —
+  a floor must never appear twice after mixed-source hydration.
 
 Key distinction the whole system depends on: **`refresh` caches topic metadata
 only; it does not cache floors.** `hydrate`/`crawl` cache posts. "0 cached
@@ -97,7 +110,8 @@ floors" means metadata-only, not an error.
   the full `post_stream`; the display layer is where counts are bounded.
 - Cookies are handled only via an explicit Netscape `cookies.txt` (default
   `~/.config/linuxdo-reader/cookies.txt`, env `LINUXDO_READER_COOKIES_FILE`) or a
-  Playwright profile the tool controls. Never read the OS browser cookie stores.
+  Playwright profile the tool controls. The CLI auto-loads the default file when
+  it exists and no flag/env is set. Never read the OS browser cookie stores.
 - Only `linux.do` / `*.linux.do` cookies are ever loaded or written
   (`_is_linuxdo_domain`).
 - The package version lives in **both** `pyproject.toml` and

@@ -15,10 +15,10 @@ def test_parse_topic_list_feed_extracts_topic_metadata() -> None:
     assert "公益站" in topics[1].excerpt
 
 
-def test_parse_topic_feed_extracts_recent_comments() -> None:
+def test_parse_topic_feed_extracts_recent_comments_in_floor_order() -> None:
     posts = parse_topic_feed(TOPIC_RSS, topic_id=2489984)
 
-    assert [post.post_number for post in posts] == [105, 104]
-    assert posts[0].author == "欣欣|林可欣"
-    assert posts[0].url == "https://linux.do/t/topic/2489984/105"
-    assert posts[1].text == "公益站还是要留给真用的人。"
+    assert [post.post_number for post in posts] == [104, 105]
+    assert posts[1].author == "欣欣|林可欣"
+    assert posts[1].url == "https://linux.do/t/topic/2489984/105"
+    assert posts[0].text == "公益站还是要留给真用的人。"
