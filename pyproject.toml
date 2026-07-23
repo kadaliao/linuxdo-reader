@@ -1,12 +1,17 @@
 [project]
 name = "linuxdo-reader"
-version = "0.3.0"
+version = "0.3.1"
 description = "Skill helper for reading Linux.do topics and discussion floors"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Kada Liao", email = "kadaliao@gmail.com" }
 ]
 requires-python = ">=3.11"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
     "beautifulsoup4>=4.13.4",
     "defusedxml>=0.7.1",
