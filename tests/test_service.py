@@ -82,6 +82,46 @@ def test_service_hydrate_topic_can_use_browser_fetcher(tmp_path) -> None:
     assert len(store.list_posts(2489666)) == 2
 
 
+def test_complete_hydration_replaces_stale_cached_floors(tmp_path) -> None:
+    store = Store(tmp_path / "linuxdo.sqlite")
+    service = LinuxDoService(store=store)
+    store.upsert_posts(
+        [
+            service.make_post_for_tests(2489666, 1, "old main"),
+            service.make_post_for_tests(2489666, 2, "deleted reply"),
+        ]
+    )
+    fresh_main = service.make_post_for_tests(2489666, 1, "fresh main")
+    service.browser_fetcher = lambda _topic_id: FetchResult(
+        [fresh_main], complete=True, source="browser", expected_count=1
+    )
+
+    service.hydrate_topic(2489666, prefer="browser")
+
+    assert store.list_posts(2489666) == [fresh_main]
+
+
+def test_partial_hydration_preserves_cached_floors(tmp_path) -> None:
+    store = Store(tmp_path / "linuxdo.sqlite")
+    service = LinuxDoService(store=store)
+    stale_reply = service.make_post_for_tests(2489666, 2, "cached reply")
+    store.upsert_posts(
+        [service.make_post_for_tests(2489666, 1, "old main"), stale_reply]
+    )
+    fresh_main = service.make_post_for_tests(2489666, 1, "fresh main")
+    service.browser_fetcher = lambda _topic_id: FetchResult(
+        [fresh_main],
+        complete=False,
+        source="browser",
+        error="pagination failed",
+        expected_count=2,
+    )
+
+    service.hydrate_topic(2489666, prefer="browser")
+
+    assert store.list_posts(2489666) == [fresh_main, stale_reply]
+
+
 @respx.mock
 def test_service_crawl_top_hydrates_each_refreshed_topic(tmp_path) -> None:
     respx.get("https://linux.do/top.rss").mock(

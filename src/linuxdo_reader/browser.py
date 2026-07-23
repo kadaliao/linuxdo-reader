@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .client import posts_from_json
+from .client import posts_from_json, validated_post_stream
 from .cookies import (
     default_browser_profile_dir,
     load_playwright_cookies,
@@ -213,6 +213,7 @@ def _fetch_topic_posts_from_page(
 ) -> FetchResult:
     try:
         topic_json = _page_fetch_json(page, f"/t/-/{topic_id}.json?print=true")
+        post_stream, stream = validated_post_stream(topic_json, topic_id)
     except Exception as exc:
         _status(status_callback, "Falling back to rendered page text")
         posts = _page_posts_from_rendered_topic(
@@ -227,9 +228,7 @@ def _fetch_topic_posts_from_page(
             error=f"Browser JSON unavailable; rendered page samples only: {exc}",
         )
 
-    post_stream = topic_json.get("post_stream", {})
-    stream = [int(post_id) for post_id in post_stream.get("stream", [])]
-    posts = posts_from_json(topic_id, post_stream.get("posts", []), source="browser")
+    posts = posts_from_json(topic_id, post_stream["posts"], source="browser")
     seen_ids = {post.post_id for post in posts}
     remaining = [post_id for post_id in stream if str(post_id) not in seen_ids]
     error: str | None = None

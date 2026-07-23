@@ -88,9 +88,8 @@ class LinuxDoClient:
 
     def fetch_topic_json(self, topic_id: int, chunk_size: int = 20) -> FetchResult:
         topic_json = self._fetch_topic_json_payload(topic_id)
-        post_stream = topic_json.get("post_stream") or {}
-        stream = [int(post_id) for post_id in post_stream.get("stream", [])]
-        posts = posts_from_json(topic_id, post_stream.get("posts", []), source="json")
+        post_stream, stream = validated_post_stream(topic_json, topic_id)
+        posts = posts_from_json(topic_id, post_stream["posts"], source="json")
         seen_ids = {post.post_id for post in posts}
         remaining = [post_id for post_id in stream if str(post_id) not in seen_ids]
         error: str | None = None
@@ -215,6 +214,25 @@ class LinuxDoClient:
                 chunks.append(chunk)
             encoding = response.encoding or "utf-8"
         return b"".join(chunks).decode(encoding, errors="replace")
+
+
+def validated_post_stream(
+    payload: dict[str, object], topic_id: int
+) -> tuple[dict[str, list[object]], list[int]]:
+    raw_post_stream = payload.get("post_stream")
+    if not isinstance(raw_post_stream, dict):
+        raise ValueError(f"Topic {topic_id} JSON has no post_stream object")
+    raw_stream = raw_post_stream.get("stream")
+    raw_posts = raw_post_stream.get("posts", [])
+    if not isinstance(raw_stream, list) or not raw_stream:
+        raise ValueError(f"Topic {topic_id} JSON has an empty post stream")
+    if not isinstance(raw_posts, list):
+        raise ValueError(f"Topic {topic_id} JSON has invalid embedded posts")
+    try:
+        stream = [int(post_id) for post_id in raw_stream]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Topic {topic_id} JSON has invalid post ids") from exc
+    return {"stream": raw_stream, "posts": raw_posts}, stream
 
 
 def posts_from_json(topic_id: int, items: list[object], source: str) -> list[Post]:

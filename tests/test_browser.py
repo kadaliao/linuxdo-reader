@@ -11,6 +11,7 @@ from linuxdo_reader.browser import (
     rendered_rows_to_posts,
     topics_from_browser_rows,
 )
+from linuxdo_reader.models import Post
 
 
 def test_build_topic_url_accepts_id_or_url() -> None:
@@ -174,6 +175,35 @@ def test_rendered_rows_to_posts_orders_floors_and_avoids_number_collisions() -> 
     assert posts[0].text == "首帖"
     assert posts[2].post_id == "rendered-3"
     assert all(post.source == "browser:page" for post in posts)
+
+
+def test_browser_empty_post_stream_falls_back_to_rendered_page(monkeypatch) -> None:
+    class FakePage:
+        def evaluate(self, _script, _path=None):
+            return {}
+
+    rendered_post = Post(
+        2489984,
+        "rendered-1",
+        1,
+        "author",
+        "visible sample",
+        "visible sample",
+        "https://linux.do/t/topic/2489984/1",
+        "",
+        "browser:page",
+    )
+    monkeypatch.setattr(
+        "linuxdo_reader.browser._page_posts_from_rendered_topic",
+        lambda *_args, **_kwargs: [rendered_post],
+    )
+
+    result = _fetch_topic_posts_from_page(FakePage(), 2489984)
+
+    assert result.posts == [rendered_post]
+    assert result.complete is False
+    assert result.source == "browser:page"
+    assert "post_stream" in (result.error or "")
 
 
 def test_browser_json_pagination_failure_keeps_fetched_posts() -> None:

@@ -101,6 +101,18 @@ def test_fetch_topic_json_falls_back_from_print_to_plain_json() -> None:
     assert sleeps == [1.0, 1.0]
 
 
+@pytest.mark.parametrize("payload", [{}, {"post_stream": {}}])
+@respx.mock
+def test_fetch_topic_json_rejects_empty_post_stream(payload) -> None:
+    respx.get("https://linux.do/t/-/2489984.json").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    client = LinuxDoClient()
+
+    with pytest.raises(ValueError, match="post.stream|post stream"):
+        client.fetch_topic_json(2489984)
+
+
 @respx.mock
 def test_fetch_topic_json_keeps_partial_posts_when_pagination_fails() -> None:
     respx.get("https://linux.do/t/-/2489984.json").mock(

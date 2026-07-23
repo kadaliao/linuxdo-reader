@@ -74,7 +74,10 @@ class LinuxDoService:
                     rss_result,
                     error=f"JSON fetch failed ({exc}); {rss_result.error}",
                 )
-        self.store.upsert_posts(result.posts)
+        if result.complete:
+            self.store.replace_posts(topic_id, result.posts)
+        else:
+            self.store.upsert_posts(result.posts)
         self.store.record_fetch_result(topic_id, result)
         return result
 

@@ -102,45 +102,54 @@ class Store:
 
     def upsert_posts(self, posts: list[Post]) -> None:
         with self._conn:
-            # A floor fetched via RSS carries a synthetic "<topic>-<number>"
-            # post_id while JSON/browser fetches carry the numeric Discourse
-            # id. Drop stale rows for the same floor so sources never stack.
-            self._conn.executemany(
-                "DELETE FROM posts WHERE topic_id = ? AND post_number = ? AND post_id <> ?",
-                [(post.topic_id, post.post_number, post.post_id) for post in posts],
+            self._upsert_posts(posts)
+
+    def replace_posts(self, topic_id: int, posts: list[Post]) -> None:
+        if any(post.topic_id != topic_id for post in posts):
+            raise ValueError("Replacement posts must all belong to the requested topic")
+        with self._conn:
+            self._conn.execute("DELETE FROM posts WHERE topic_id = ?", (topic_id,))
+            self._upsert_posts(posts)
+
+    def _upsert_posts(self, posts: list[Post]) -> None:
+        # RSS uses synthetic ids while JSON/browser uses Discourse ids. Drop a
+        # stale row for the same floor so mixed sources never create duplicates.
+        self._conn.executemany(
+            "DELETE FROM posts WHERE topic_id = ? AND post_number = ? AND post_id <> ?",
+            [(post.topic_id, post.post_number, post.post_id) for post in posts],
+        )
+        self._conn.executemany(
+            """
+            INSERT INTO posts (
+                topic_id, post_id, post_number, author, text, cooked, url,
+                created_at, source, updated_at
             )
-            self._conn.executemany(
-                """
-                INSERT INTO posts (
-                    topic_id, post_id, post_number, author, text, cooked, url,
-                    created_at, source, updated_at
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(topic_id, post_id) DO UPDATE SET
+                post_number=excluded.post_number,
+                author=excluded.author,
+                text=excluded.text,
+                cooked=excluded.cooked,
+                url=excluded.url,
+                created_at=excluded.created_at,
+                source=excluded.source,
+                updated_at=CURRENT_TIMESTAMP
+            """,
+            [
+                (
+                    post.topic_id,
+                    post.post_id,
+                    post.post_number,
+                    post.author,
+                    post.text,
+                    post.cooked,
+                    post.url,
+                    post.created_at,
+                    post.source,
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(topic_id, post_id) DO UPDATE SET
-                    post_number=excluded.post_number,
-                    author=excluded.author,
-                    text=excluded.text,
-                    cooked=excluded.cooked,
-                    url=excluded.url,
-                    created_at=excluded.created_at,
-                    source=excluded.source,
-                    updated_at=CURRENT_TIMESTAMP
-                """,
-                [
-                    (
-                        post.topic_id,
-                        post.post_id,
-                        post.post_number,
-                        post.author,
-                        post.text,
-                        post.cooked,
-                        post.url,
-                        post.created_at,
-                        post.source,
-                    )
-                    for post in posts
-                ],
-            )
+                for post in posts
+            ],
+        )
 
     def record_fetch_result(self, topic_id: int, result: FetchResult) -> None:
         with self._conn:
