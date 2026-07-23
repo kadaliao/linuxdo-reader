@@ -113,6 +113,30 @@ def test_fetch_topic_json_rejects_empty_post_stream(payload) -> None:
         client.fetch_topic_json(2489984)
 
 
+@pytest.mark.parametrize("payload", [b"[]", b"null"], ids=["array", "null"])
+@respx.mock
+def test_fetch_topic_json_keeps_partial_posts_for_non_object_page(payload) -> None:
+    respx.get("https://linux.do/t/-/2489984.json").mock(
+        return_value=httpx.Response(200, json=TOPIC_JSON)
+    )
+    respx.get("https://linux.do/t/2489984/posts.json").mock(
+        return_value=httpx.Response(
+            200,
+            content=payload,
+            headers={"content-type": "application/json"},
+        )
+    )
+    client = LinuxDoClient()
+
+    result = client.fetch_topic_json(2489984)
+
+    assert [post.post_number for post in result.posts] == [1]
+    assert result.complete is False
+    assert result.expected_count == 3
+    assert "pagination stopped" in (result.error or "")
+    assert "not an object" in (result.error or "")
+
+
 @respx.mock
 def test_fetch_topic_json_keeps_partial_posts_when_pagination_fails() -> None:
     respx.get("https://linux.do/t/-/2489984.json").mock(

@@ -99,12 +99,13 @@ class LinuxDoClient:
                 response = self._get_json_with_retry(
                     f"/t/{topic_id}/posts.json", params=params
                 )
-                payload = response.json()
-            except (httpx.HTTPError, ValueError) as exc:
+                page_posts = posts_from_pagination_payload(
+                    response.json(), topic_id, source="json"
+                )
+            except (httpx.HTTPError, TypeError, ValueError) as exc:
                 error = f"JSON pagination stopped after {len(posts)} posts: {exc}"
                 break
-            for item in (payload.get("post_stream") or {}).get("posts", []):
-                post = _post_from_json(topic_id, item, source="json")
+            for post in page_posts:
                 if post.post_id not in seen_ids:
                     posts.append(post)
                     seen_ids.add(post.post_id)
@@ -233,6 +234,20 @@ def validated_post_stream(
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Topic {topic_id} JSON has invalid post ids") from exc
     return {"stream": raw_stream, "posts": raw_posts}, stream
+
+
+def posts_from_pagination_payload(
+    payload: object, topic_id: int, source: str
+) -> list[Post]:
+    if not isinstance(payload, dict):
+        raise ValueError(f"Topic {topic_id} pagination JSON is not an object")
+    post_stream = payload.get("post_stream")
+    if not isinstance(post_stream, dict):
+        raise ValueError(f"Topic {topic_id} pagination JSON has no post_stream object")
+    items = post_stream.get("posts")
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise ValueError(f"Topic {topic_id} pagination JSON has invalid posts")
+    return posts_from_json(topic_id, items, source=source)
 
 
 def posts_from_json(topic_id: int, items: list[object], source: str) -> list[Post]:
