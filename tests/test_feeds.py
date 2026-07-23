@@ -1,3 +1,6 @@
+import pytest
+from defusedxml.common import EntitiesForbidden
+
 from linuxdo_reader.feeds import parse_topic_feed, parse_topic_list_feed
 
 from .fixtures import LATEST_RSS, TOPIC_RSS
@@ -13,6 +16,16 @@ def test_parse_topic_list_feed_extracts_topic_metadata() -> None:
     assert topics[0].reply_count == 1
     assert topics[1].participant_count == 95
     assert "公益站" in topics[1].excerpt
+
+
+def test_feed_parser_rejects_xml_entities() -> None:
+    xml = """<?xml version="1.0"?>
+    <!DOCTYPE rss [<!ENTITY payload "untrusted">]>
+    <rss><channel><item><title>&payload;</title></item></channel></rss>
+    """
+
+    with pytest.raises(EntitiesForbidden):
+        parse_topic_list_feed(xml, source="latest")
 
 
 def test_parse_topic_feed_extracts_recent_comments_in_floor_order() -> None:

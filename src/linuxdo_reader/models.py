@@ -28,3 +28,19 @@ class Post:
     url: str
     created_at: str
     source: str
+
+
+@dataclass(frozen=True)
+class FetchResult:
+    posts: list[Post]
+    complete: bool
+    source: str
+    error: str | None = None
+    expected_count: int | None = None
+    observed_count: int | None = None
+
+    @property
+    def fetched_count(self) -> int:
+        return (
+            self.observed_count if self.observed_count is not None else len(self.posts)
+        )

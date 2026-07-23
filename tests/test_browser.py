@@ -1,6 +1,7 @@
 import pytest
 
 from linuxdo_reader.browser import (
+    _fetch_topic_posts_from_page,
     build_topic_url,
     export_context_cookies,
     fetch_topic_with_browser,
@@ -14,7 +15,10 @@ from linuxdo_reader.browser import (
 
 def test_build_topic_url_accepts_id_or_url() -> None:
     assert build_topic_url("2489984") == "https://linux.do/t/topic/2489984"
-    assert build_topic_url("https://linux.do/t/topic/2489984") == "https://linux.do/t/topic/2489984"
+    assert (
+        build_topic_url("https://linux.do/t/topic/2489984")
+        == "https://linux.do/t/topic/2489984"
+    )
 
 
 def test_browser_mode_install_hint_mentions_uv_tool_extra(monkeypatch) -> None:
@@ -29,7 +33,10 @@ def test_browser_mode_install_hint_mentions_uv_tool_extra(monkeypatch) -> None:
     with pytest.raises(RuntimeError) as exc_info:
         fetch_topic_with_browser("2489984")
 
-    assert "uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force" in str(exc_info.value)
+    assert (
+        "uv tool install git+https://github.com/kadaliao/linuxdo-reader --with playwright --force"
+        in str(exc_info.value)
+    )
 
 
 def test_topics_from_browser_rows_parses_rendered_top_rows() -> None:
@@ -132,8 +139,18 @@ def test_merge_rendered_rows_accumulates_across_scroll_rounds() -> None:
     merge_rendered_rows(
         collected,
         [
-            {"postId": "2", "postNumber": "2", "author": "b", "text": "更长的完整楼层文本"},
-            {"postId": "3", "postNumber": "3", "author": "c", "text": "后来滚动加载的楼层"},
+            {
+                "postId": "2",
+                "postNumber": "2",
+                "author": "b",
+                "text": "更长的完整楼层文本",
+            },
+            {
+                "postId": "3",
+                "postNumber": "3",
+                "author": "c",
+                "text": "后来滚动加载的楼层",
+            },
             "not-a-dict",
             {"postId": "4", "postNumber": "4", "author": "d", "text": ""},
         ],
@@ -157,6 +174,47 @@ def test_rendered_rows_to_posts_orders_floors_and_avoids_number_collisions() -> 
     assert posts[0].text == "首帖"
     assert posts[2].post_id == "rendered-3"
     assert all(post.source == "browser:page" for post in posts)
+
+
+def test_browser_json_pagination_failure_keeps_fetched_posts() -> None:
+    class FakePage:
+        def evaluate(self, _script, path=None):
+            if path == "/t/-/2489984.json?print=true":
+                return {
+                    "post_stream": {
+                        "stream": [10, 20, 30],
+                        "posts": [
+                            {
+                                "id": 10,
+                                "post_number": 1,
+                                "username": "main",
+                                "cooked": "<p>首帖</p>",
+                            }
+                        ],
+                    }
+                }
+            if "post_ids[]=20" in path:
+                return {
+                    "post_stream": {
+                        "posts": [
+                            {
+                                "id": 20,
+                                "post_number": 2,
+                                "username": "alice",
+                                "cooked": "<p>已抓回复</p>",
+                            }
+                        ]
+                    }
+                }
+            raise RuntimeError("429 rate limited")
+
+    result = _fetch_topic_posts_from_page(FakePage(), 2489984, chunk_size=1)
+
+    assert [post.post_number for post in result.posts] == [1, 2]
+    assert result.complete is False
+    assert result.expected_count == 3
+    assert "429 rate limited" in (result.error or "")
+    assert all(post.source == "browser" for post in result.posts)
 
 
 def test_launch_proxy_options_builds_playwright_proxy() -> None:

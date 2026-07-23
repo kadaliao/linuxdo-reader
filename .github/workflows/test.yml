@@ -5,10 +5,29 @@ on:
   pull_request:
 
 jobs:
-  pytest:
+  quality:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Run tests
-        run: uv run pytest -q
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Lint
+        run: uv run ruff check .
+      - name: Run isolated tests
+        run: PYTHONWARNINGS='error::ResourceWarning' uv run --isolated --with-editable . --with pytest --with respx pytest -q
+      - name: Security scan
+        if: matrix.python-version == '3.13'
+        run: |
+          uv run bandit -q -r src
+          uv run pip-audit
+      - name: Build distributions
+        if: matrix.python-version == '3.13'
+        run: |
+          uv build
+          tar -tzf dist/*.tar.gz > /tmp/sdist-files.txt
+          grep -q '/skills/linuxdo-reader/SKILL.md$' /tmp/sdist-files.txt

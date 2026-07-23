@@ -106,7 +106,10 @@ def install_skill_from_github(ref: str | None = None, dest: str | Path | None = 
     dest_path = Path(dest).expanduser() if dest else default_skill_dest()
     with tempfile.TemporaryDirectory(prefix="linuxdo-reader-skill-") as tmpdir:
         archive_path = Path(tmpdir) / "linuxdo-reader.tar.gz"
-        urllib.request.urlretrieve(REPO_ARCHIVE_URL.format(ref=target_ref), archive_path)
+        # The URL template has a fixed HTTPS origin; only its GitHub ref path varies.
+        urllib.request.urlretrieve(  # nosec B310
+            REPO_ARCHIVE_URL.format(ref=target_ref), archive_path
+        )
         source = _extract_skill_from_archive(archive_path, Path(tmpdir) / "archive")
         return install_skill_from_directory(source, dest_path, force=force)
 
