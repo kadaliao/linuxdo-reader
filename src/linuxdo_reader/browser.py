@@ -4,14 +4,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .client import posts_from_json
+from .client import posts_from_json, validated_post_stream
 from .cookies import (
     default_browser_profile_dir,
     load_playwright_cookies,
     write_netscape_cookies,
 )
 from .feeds import canonical_topic_url, topic_id_from_url
-from .models import Post, Topic
+from .models import FetchResult, Post, Topic
 
 PLAYWRIGHT_INSTALL_HINT = (
     "Browser mode requires Playwright. "
@@ -137,7 +137,9 @@ def refresh_cookies_with_browser(
     except ImportError as exc:
         raise RuntimeError(PLAYWRIGHT_INSTALL_HINT) from exc
 
-    profile_path = Path(profile_dir).expanduser() if profile_dir else default_browser_profile_dir()
+    profile_path = (
+        Path(profile_dir).expanduser() if profile_dir else default_browser_profile_dir()
+    )
     profile_path.mkdir(parents=True, exist_ok=True)
     try:
         with sync_playwright() as playwright:
@@ -166,7 +168,7 @@ def fetch_topic_posts_with_browser(
     cookies_file: str | Path | None = None,
     proxy: str | None = None,
     status_callback: Callable[[str], None] | None = None,
-) -> list[Post]:
+) -> FetchResult:
     """Fetch topic posts through a real browser session.
 
     This uses Playwright to let the site complete any browser checks, then runs
@@ -190,38 +192,77 @@ def fetch_topic_posts_with_browser(
             page = context.new_page()
             _status(status_callback, f"Opening {url}")
             page.goto(url, wait_until="domcontentloaded")
-            try:
-                topic_json = _page_fetch_json(page, f"/t/-/{topic_id}.json?print=true")
-                post_stream = topic_json.get("post_stream", {})
-                stream = [int(post_id) for post_id in post_stream.get("stream", [])]
-                posts = posts_from_json(topic_id, post_stream.get("posts", []), source="browser")
-                seen_ids = {post.post_id for post in posts}
-                remaining = [post_id for post_id in stream if str(post_id) not in seen_ids]
-                for index in range(0, len(remaining), chunk_size):
-                    chunk = remaining[index : index + chunk_size]
-                    query = "&".join(f"post_ids[]={post_id}" for post_id in chunk)
-                    _status(status_callback, f"Fetching posts {index + 1}-{index + len(chunk)}")
-                    payload = _page_fetch_json(page, f"/t/{topic_id}/posts.json?{query}")
-                    for post in posts_from_json(
-                        topic_id,
-                        payload.get("post_stream", {}).get("posts", []),
-                        source="browser",
-                    ):
-                        if post.post_id not in seen_ids:
-                            posts.append(post)
-                            seen_ids.add(post.post_id)
-            except Exception:
-                _status(status_callback, "Falling back to rendered page text")
-                posts = _page_posts_from_rendered_topic(
-                    page,
-                    topic_id,
-                    status_callback=status_callback,
-                )
+            result = _fetch_topic_posts_from_page(
+                page,
+                topic_id,
+                chunk_size=chunk_size,
+                status_callback=status_callback,
+            )
             context.close()
             browser.close()
     except Exception as exc:
         raise RuntimeError(_browser_error_message(exc)) from exc
-    return sorted(posts, key=lambda post: post.post_number)
+    return result
+
+
+def _fetch_topic_posts_from_page(
+    page: Any,
+    topic_id: int,
+    chunk_size: int = 20,
+    status_callback: Callable[[str], None] | None = None,
+) -> FetchResult:
+    try:
+        topic_json = _page_fetch_json(page, f"/t/-/{topic_id}.json?print=true")
+        post_stream, stream = validated_post_stream(topic_json, topic_id)
+    except Exception as exc:
+        _status(status_callback, "Falling back to rendered page text")
+        posts = _page_posts_from_rendered_topic(
+            page,
+            topic_id,
+            status_callback=status_callback,
+        )
+        return FetchResult(
+            posts=posts,
+            complete=False,
+            source="browser:page",
+            error=f"Browser JSON unavailable; rendered page samples only: {exc}",
+        )
+
+    posts = posts_from_json(topic_id, post_stream["posts"], source="browser")
+    seen_ids = {post.post_id for post in posts}
+    remaining = [post_id for post_id in stream if str(post_id) not in seen_ids]
+    error: str | None = None
+    for index in range(0, len(remaining), chunk_size):
+        chunk = remaining[index : index + chunk_size]
+        query = "&".join(f"post_ids[]={post_id}" for post_id in chunk)
+        _status(status_callback, f"Fetching posts {index + 1}-{index + len(chunk)}")
+        try:
+            payload = _page_fetch_json(page, f"/t/{topic_id}/posts.json?{query}")
+        except Exception as exc:
+            error = f"Browser JSON pagination stopped after {len(posts)} posts: {exc}"
+            _status(status_callback, error)
+            break
+        for post in posts_from_json(
+            topic_id,
+            payload.get("post_stream", {}).get("posts", []),
+            source="browser",
+        ):
+            if post.post_id not in seen_ids:
+                posts.append(post)
+                seen_ids.add(post.post_id)
+    posts = sorted(posts, key=lambda post: post.post_number)
+    expected_count = len(stream) if stream else len(posts)
+    complete = error is None and all(str(post_id) in seen_ids for post_id in stream)
+    if not complete and error is None:
+        missing_count = sum(str(post_id) not in seen_ids for post_id in stream)
+        error = f"Browser JSON responses omitted {missing_count} expected posts"
+    return FetchResult(
+        posts=posts,
+        complete=complete,
+        source="browser",
+        error=error,
+        expected_count=expected_count,
+    )
 
 
 def topics_from_browser_rows(rows: list[object], source: str) -> list[Topic]:
@@ -381,7 +422,9 @@ def merge_rendered_rows(
         if key is None:
             continue
         existing = collected.get(key)
-        if existing is None or len(str(row.get("text") or "")) > len(str(existing.get("text") or "")):
+        if existing is None or len(str(row.get("text") or "")) > len(
+            str(existing.get("text") or "")
+        ):
             collected[key] = row
     return collected
 

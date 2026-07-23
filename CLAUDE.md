@@ -58,7 +58,8 @@ is a deliberate fallback chain. Preserve this behavior when editing:
   (`?print=true` first, then plain topic JSON; both page the full stream via
   `posts.json`, honor 429 `Retry-After`, and keep partial results if pagination
   dies mid-topic), falling back to RSS on error; `prefer=rss` → RSS only;
-  `prefer=browser` → Playwright.
+  `prefer=browser` → Playwright. Every path returns `FetchResult` with
+  `complete/source/error/expected_count`; do not collapse it back to a bare list.
 - **Crawls** (`crawl_top` / `crawl_latest`): per-topic failures are collected in
   `CrawlReport.errors` instead of aborting the run; a `delay` (default 0.5s)
   spaces out topics.
@@ -75,15 +76,19 @@ callers and the Skill reason about it.
 ### Cache model
 
 `Store` is a SQLite cache (`~/.local/share/linuxdo-reader/linuxdo.sqlite` by
-default) with two tables:
+default) with topic/post data plus refresh and fetch state:
 
 - `topics` — keyed by `topic_id`; upserts refresh metadata + `updated_at`.
-  `list_topics` orders by `updated_at` first so the digest reflects the most
-  recent refresh batch, not all-time reply counts.
 - `posts` — keyed by `(topic_id, post_id)`; the discussion floors. Upserts also
   drop rows with the same `(topic_id, post_number)` but a different `post_id`,
   because RSS uses synthetic ids while JSON/browser use numeric Discourse ids —
   a floor must never appear twice after mixed-source hydration.
+- `refresh_batches` / `refresh_batch_topics` — preserve source, period, timing,
+  completion, membership, and order. `list_topics` reads only the latest
+  successful batch, with an old-cache fallback for databases created before
+  batches existed.
+- `topic_fetches` — persists the latest per-topic completeness, source, error,
+  expected count, and fetched count used by digest warnings.
 
 Key distinction the whole system depends on: **`refresh` caches topic metadata
 only; it does not cache floors.** `hydrate`/`crawl` cache posts. "0 cached

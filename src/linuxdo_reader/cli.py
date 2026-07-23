@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
 from typing import Annotated, NoReturn, TypeVar
 
@@ -8,6 +9,7 @@ import httpx
 import typer
 
 from .cookies import default_cookies_file
+from .models import FetchResult
 from .service import CrawlReport, LinuxDoService
 from .storage import Store
 
@@ -17,12 +19,32 @@ app = typer.Typer(
     help="Helper CLI for the Linux.do Reader skill.",
     context_settings=CONTEXT_SETTINGS,
 )
-auth_app = typer.Typer(help="Manage Linux.do login cookies.", context_settings=CONTEXT_SETTINGS)
+auth_app = typer.Typer(
+    help="Manage Linux.do login cookies.", context_settings=CONTEXT_SETTINGS
+)
 app.add_typer(auth_app, name="auth")
 
 T = TypeVar("T")
 
-PREFER_CHOICES = ("json", "rss", "browser")
+
+class TopicSource(str, Enum):
+    top = "top"
+    latest = "latest"
+
+
+class TopPeriod(str, Enum):
+    daily = "daily"
+    weekly = "weekly"
+    monthly = "monthly"
+    quarterly = "quarterly"
+    yearly = "yearly"
+    all = "all"
+
+
+class FetchPreference(str, Enum):
+    json = "json"
+    rss = "rss"
+    browser = "browser"
 
 
 def default_db_path() -> Path:
@@ -32,11 +54,6 @@ def default_db_path() -> Path:
 def _fail(message: str) -> NoReturn:
     typer.echo(f"Error: {message}", err=True)
     raise typer.Exit(1)
-
-
-def _validate_prefer(prefer: str) -> None:
-    if prefer not in PREFER_CHOICES:
-        _fail(f"Unknown --prefer value {prefer!r}. Choose from: {', '.join(PREFER_CHOICES)}.")
 
 
 def _run_cli(action: Callable[[], T]) -> T:
@@ -80,8 +97,12 @@ def main(
 @app.command("refresh")
 def refresh(
     ctx: typer.Context,
-    source: Annotated[str, typer.Option("--source", help="top or latest")] = "top",
-    period: Annotated[str, typer.Option("--period", help="Top period")] = "daily",
+    source: Annotated[
+        TopicSource, typer.Option("--source", help="Topic list source.")
+    ] = TopicSource.top,
+    period: Annotated[
+        TopPeriod, typer.Option("--period", help="Top period.")
+    ] = TopPeriod.daily,
     limit: Annotated[int, typer.Option("--limit", min=1, max=100)] = 20,
 ) -> None:
     def action() -> list:
@@ -93,8 +114,8 @@ def refresh(
             )
             return (
                 service.refresh_latest(limit=limit)
-                if source == "latest"
-                else service.refresh_top(period=period, limit=limit)
+                if source is TopicSource.latest
+                else service.refresh_top(period=period.value, limit=limit)
             )
 
     topics = _run_cli(action)
@@ -105,25 +126,28 @@ def refresh(
 def hydrate(
     ctx: typer.Context,
     topic: Annotated[str, typer.Argument(help="Topic id or linux.do topic URL.")],
-    prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
+    prefer: Annotated[
+        FetchPreference, typer.Option("--prefer", help="Fetch mode.")
+    ] = FetchPreference.json,
 ) -> None:
-    _validate_prefer(prefer)
-
-    def action() -> list:
+    def action() -> FetchResult:
         with Store(ctx.obj["db"]) as store:
             service = LinuxDoService(
                 store,
                 cookies_file=ctx.obj["cookies_file"],
                 proxy=ctx.obj["proxy"],
             )
-            return service.hydrate_topic(topic, prefer=prefer)
+            return service.hydrate_topic(topic, prefer=prefer.value)
 
-    posts = _run_cli(action)
-    typer.echo(f"Cached {len(posts)} posts.")
-    if prefer == "json" and posts and all(post.source == "rss" for post in posts):
+    result = _run_cli(action)
+    typer.echo(f"Cached {result.fetched_count} posts.")
+    if not result.complete:
+        expected = (
+            f" of {result.expected_count}" if result.expected_count is not None else ""
+        )
         typer.echo(
-            "Note: JSON fetch failed, so this is the RSS window only "
-            "(recent posts, not full history). Try --prefer browser for all floors.",
+            f"Warning: incomplete fetch from {result.source}; cached "
+            f"{result.fetched_count}{expected} posts. {result.error or ''}".rstrip(),
             err=True,
         )
 
@@ -131,17 +155,23 @@ def hydrate(
 @app.command("crawl")
 def crawl(
     ctx: typer.Context,
-    source: Annotated[str, typer.Option("--source", help="top or latest")] = "top",
-    period: Annotated[str, typer.Option("--period", help="Top period")] = "daily",
+    source: Annotated[
+        TopicSource, typer.Option("--source", help="Topic list source.")
+    ] = TopicSource.top,
+    period: Annotated[
+        TopPeriod, typer.Option("--period", help="Top period.")
+    ] = TopPeriod.daily,
     limit: Annotated[int, typer.Option("--limit", min=1, max=50)] = 10,
-    prefer: Annotated[str, typer.Option("--prefer", help="json, rss, or browser")] = "json",
+    prefer: Annotated[
+        FetchPreference, typer.Option("--prefer", help="Fetch mode.")
+    ] = FetchPreference.json,
     delay: Annotated[
         float,
-        typer.Option("--delay", min=0.0, max=30.0, help="Pause between topics in seconds."),
+        typer.Option(
+            "--delay", min=0.0, max=30.0, help="Pause between topics in seconds."
+        ),
     ] = 0.5,
 ) -> None:
-    _validate_prefer(prefer)
-
     def action() -> CrawlReport:
         with Store(ctx.obj["db"]) as store:
             service = LinuxDoService(
@@ -149,13 +179,25 @@ def crawl(
                 cookies_file=ctx.obj["cookies_file"],
                 proxy=ctx.obj["proxy"],
             )
-            if source == "latest":
-                return service.crawl_latest(limit=limit, prefer=prefer, delay=delay)
-            return service.crawl_top(period=period, limit=limit, prefer=prefer, delay=delay)
+            if source is TopicSource.latest:
+                return service.crawl_latest(
+                    limit=limit, prefer=prefer.value, delay=delay
+                )
+            return service.crawl_top(
+                period=period.value,
+                limit=limit,
+                prefer=prefer.value,
+                delay=delay,
+            )
 
     report = _run_cli(action)
-    for topic_id, count in report.counts.items():
-        typer.echo(f"{topic_id}: cached {count} posts")
+    for topic_id, result in report.results.items():
+        typer.echo(f"{topic_id}: cached {result.fetched_count} posts")
+        if not result.complete:
+            typer.echo(
+                f"{topic_id}: incomplete ({result.source}: {result.error or 'unknown reason'})",
+                err=True,
+            )
     for topic_id, error in report.errors.items():
         typer.echo(f"{topic_id}: failed ({error})", err=True)
     if report.errors and not report.counts:
@@ -167,7 +209,9 @@ def digest(
     ctx: typer.Context,
     output: Annotated[
         Path | None,
-        typer.Option("--output", "-o", help="Write Markdown to a file. Omit to print to stdout."),
+        typer.Option(
+            "--output", "-o", help="Write Markdown to a file. Omit to print to stdout."
+        ),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", min=1, max=50)] = 10,
     comments_per_topic: Annotated[
@@ -227,12 +271,16 @@ def search(
 @app.command("browser-dump")
 def browser_dump(
     topic: Annotated[str, typer.Argument(help="Topic id or linux.do topic URL.")],
-    output: Annotated[Path, typer.Option("--output", "-o", help="Where to save rendered text.")],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Where to save rendered text.")
+    ],
     scroll_rounds: Annotated[int, typer.Option("--scroll-rounds", min=1, max=100)] = 12,
 ) -> None:
     from .browser import fetch_topic_with_browser
 
-    text = _run_cli(lambda: fetch_topic_with_browser(topic, scroll_rounds=scroll_rounds))
+    text = _run_cli(
+        lambda: fetch_topic_with_browser(topic, scroll_rounds=scroll_rounds)
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(text, encoding="utf-8")
     typer.echo(str(output))
@@ -256,15 +304,23 @@ def install_skill(
     ] = False,
     dest: Annotated[
         Path | None,
-        typer.Option("--dest", help="Explicit destination skill directory (overrides --agent/--local)."),
+        typer.Option(
+            "--dest",
+            help="Explicit destination skill directory (overrides --agent/--local).",
+        ),
     ] = None,
     ref: Annotated[
         str | None,
-        typer.Option("--ref", help="GitHub ref to install from. Defaults to this package version tag."),
+        typer.Option(
+            "--ref",
+            help="GitHub ref to install from. Defaults to this package version tag.",
+        ),
     ] = None,
     source: Annotated[
         Path | None,
-        typer.Option("--source", help="Install from a local skill directory instead of GitHub."),
+        typer.Option(
+            "--source", help="Install from a local skill directory instead of GitHub."
+        ),
     ] = None,
     force: Annotated[
         bool,
@@ -283,9 +339,13 @@ def install_skill(
     except ValueError as exc:
         _fail(str(exc))
     if source:
-        installed = _run_cli(lambda: install_skill_from_directory(source, target, force=force))
+        installed = _run_cli(
+            lambda: install_skill_from_directory(source, target, force=force)
+        )
     else:
-        installed = _run_cli(lambda: install_skill_from_github(ref=ref, dest=target, force=force))
+        installed = _run_cli(
+            lambda: install_skill_from_github(ref=ref, dest=target, force=force)
+        )
     typer.echo(f"Installed Skill to {installed}")
     typer.echo("Restart your agent to pick up the Skill.")
 
@@ -307,7 +367,9 @@ def auth_login(
 ) -> None:
     from .browser import refresh_cookies_with_browser
 
-    path = _run_cli(lambda: refresh_cookies_with_browser(cookies_file=cookies_file, proxy=proxy))
+    path = _run_cli(
+        lambda: refresh_cookies_with_browser(cookies_file=cookies_file, proxy=proxy)
+    )
     typer.echo(f"Saved cookies to {path}")
 
 

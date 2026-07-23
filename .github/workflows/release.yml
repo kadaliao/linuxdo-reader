@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, e.g. v0.2.0"
+        description: "Release tag, e.g. v0.3.0"
         required: true
         type: string
       target:
-        description: "Branch or commit SHA the tag should point at"
+        description: "main or its current commit SHA (other targets are rejected)"
         required: false
         default: "main"
         type: string
@@ -26,16 +26,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create GitHub release
+        with:
+          ref: ${{ inputs.target }}
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - name: Validate release version and target
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          git fetch --no-tags origin main
+          RELEASE_SHA=$(git rev-parse HEAD)
+          MAIN_SHA=$(git rev-parse origin/main)
+          test "$RELEASE_SHA" = "$MAIN_SHA"
+          VERSION=$(uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          PACKAGE_VERSION=$(uv run python -c 'from linuxdo_reader import __version__; print(__version__)')
+          test "$VERSION" = "$PACKAGE_VERSION"
+          test "$TAG" = "v$VERSION"
+          echo "RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
+      - name: Lint
+        run: uv run ruff check .
+      - name: Test in isolated environment
+        run: PYTHONWARNINGS='error::ResourceWarning' uv run --isolated --with-editable . --with pytest --with respx pytest -q
+      - name: Security scan
+        run: |
+          uv run bandit -q -r src
+          uv run pip-audit
+      - name: Build distributions
+        run: |
+          uv build
+          tar -tzf dist/*.tar.gz > /tmp/sdist-files.txt
+          grep -q '/skills/linuxdo-reader/SKILL.md$' /tmp/sdist-files.txt
+      - name: Create GitHub release from verified SHA
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
-          TARGET: ${{ inputs.target }}
           NOTES: ${{ inputs.notes }}
         run: |
           if [ -n "$NOTES" ]; then
             printf '%s\n' "$NOTES" > /tmp/notes.md
-            gh release create "$TAG" --target "$TARGET" --title "$TAG" --notes-file /tmp/notes.md
+            gh release create "$TAG" --target "$RELEASE_SHA" --title "$TAG" --notes-file /tmp/notes.md
           else
-            gh release create "$TAG" --target "$TARGET" --title "$TAG" --generate-notes
+            gh release create "$TAG" --target "$RELEASE_SHA" --title "$TAG" --generate-notes
           fi

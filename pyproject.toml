@@ -1,6 +1,6 @@
 [project]
 name = "linuxdo-reader"
-version = "0.2.0"
+version = "0.3.0"
 description = "Skill helper for reading Linux.do topics and discussion floors"
 readme = "README.md"
 authors = [
@@ -9,19 +9,26 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.13.4",
+    "defusedxml>=0.7.1",
     "httpx>=0.28.1",
     "typer>=0.16.0",
 ]
 
 [dependency-groups]
 dev = [
+    "bandit>=1.9.4",
+    "pip-audit>=2.10.0",
     "pytest>=8.4.1",
     "respx>=0.22.0",
+    "ruff>=0.12.5",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.uv.build-backend]
+source-include = ["skills/**"]
 
 [project.scripts]
 linuxdo-reader = "linuxdo_reader.cli:app"

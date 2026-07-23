@@ -36,7 +36,9 @@ def test_cli_digest_reads_cache(tmp_path) -> None:
     )
 
     assert result.exit_code == 0
-    assert Path(output_path).read_text(encoding="utf-8").startswith("# Linux.do 热点摘要")
+    assert (
+        Path(output_path).read_text(encoding="utf-8").startswith("# Linux.do 热点摘要")
+    )
 
 
 def test_cli_accepts_short_help_flag() -> None:
@@ -72,7 +74,9 @@ def test_cli_has_crawl_command() -> None:
 @respx.mock
 def test_cli_refresh_reports_feed_errors_without_traceback(tmp_path) -> None:
     respx.get("https://linux.do/top.rss").mock(return_value=httpx.Response(403))
-    respx.get("https://linux.do/top/daily.rss").mock(side_effect=httpx.ConnectError("TLS EOF"))
+    respx.get("https://linux.do/top/daily.rss").mock(
+        side_effect=httpx.ConnectError("TLS EOF")
+    )
     runner = CliRunner()
 
     result = runner.invoke(
@@ -147,20 +151,34 @@ def test_cli_uses_default_cookies_file_when_present(tmp_path, monkeypatch) -> No
 
 @respx.mock
 def test_cli_crawl_reports_partial_failures_and_keeps_going(tmp_path) -> None:
-    respx.get("https://linux.do/top.rss").mock(return_value=httpx.Response(200, text=LATEST_RSS))
+    respx.get("https://linux.do/top.rss").mock(
+        return_value=httpx.Response(200, text=LATEST_RSS)
+    )
     respx.get("https://linux.do/t/-/2489984.json").mock(
         return_value=httpx.Response(200, json=TOPIC_JSON)
     )
     respx.get("https://linux.do/t/2489984/posts.json").mock(
         return_value=httpx.Response(200, json=POSTS_JSON)
     )
-    respx.get("https://linux.do/t/-/2491173.json").mock(return_value=httpx.Response(403))
-    respx.get("https://linux.do/t/topic/2491173.rss").mock(return_value=httpx.Response(403))
+    respx.get("https://linux.do/t/-/2491173.json").mock(
+        return_value=httpx.Response(403)
+    )
+    respx.get("https://linux.do/t/topic/2491173.rss").mock(
+        return_value=httpx.Response(403)
+    )
     runner = CliRunner()
 
     result = runner.invoke(
         app,
-        ["--db", str(tmp_path / "linuxdo.sqlite"), "crawl", "--limit", "2", "--delay", "0"],
+        [
+            "--db",
+            str(tmp_path / "linuxdo.sqlite"),
+            "crawl",
+            "--limit",
+            "2",
+            "--delay",
+            "0",
+        ],
     )
 
     assert result.exit_code == 0
@@ -173,26 +191,57 @@ def test_cli_rejects_unknown_prefer_value(tmp_path) -> None:
 
     result = runner.invoke(
         app,
-        ["--db", str(tmp_path / "linuxdo.sqlite"), "hydrate", "123", "--prefer", "browsr"],
+        [
+            "--db",
+            str(tmp_path / "linuxdo.sqlite"),
+            "hydrate",
+            "123",
+            "--prefer",
+            "browsr",
+        ],
     )
 
-    assert result.exit_code == 1
-    assert "Unknown --prefer value" in result.output
+    assert result.exit_code == 2
+    assert "Invalid value" in result.output
+    assert "browsr" in result.output
 
 
 @respx.mock
 def test_cli_hydrate_notes_rss_window_after_json_failure(tmp_path) -> None:
-    respx.get("https://linux.do/t/-/2489984.json").mock(return_value=httpx.Response(403))
+    respx.get("https://linux.do/t/-/2489984.json").mock(
+        return_value=httpx.Response(403)
+    )
     respx.get("https://linux.do/t/topic/2489984.rss").mock(
         return_value=httpx.Response(200, text=TOPIC_RSS)
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["--db", str(tmp_path / "linuxdo.sqlite"), "hydrate", "2489984"])
+    result = runner.invoke(
+        app, ["--db", str(tmp_path / "linuxdo.sqlite"), "hydrate", "2489984"]
+    )
 
     assert result.exit_code == 0
     assert "Cached 2 posts." in result.output
-    assert "RSS window" in result.output
+    assert "incomplete fetch from rss" in result.output
+    assert "RSS exposes a recent window" in result.output
+
+
+def test_cli_rejects_unknown_source_and_period(tmp_path) -> None:
+    runner = CliRunner()
+
+    bad_source = runner.invoke(
+        app,
+        ["--db", str(tmp_path / "db.sqlite"), "refresh", "--source", "latesst"],
+    )
+    bad_period = runner.invoke(
+        app,
+        ["--db", str(tmp_path / "db.sqlite"), "refresh", "--period", "daliy"],
+    )
+
+    assert bad_source.exit_code == 2
+    assert "Invalid value" in bad_source.output
+    assert bad_period.exit_code == 2
+    assert "Invalid value" in bad_period.output
 
 
 def test_cli_has_auth_commands() -> None:

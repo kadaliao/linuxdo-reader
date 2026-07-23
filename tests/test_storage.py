@@ -1,4 +1,4 @@
-from linuxdo_reader.models import Post, Topic
+from linuxdo_reader.models import FetchResult, Post, Topic
 from linuxdo_reader.storage import Store
 
 
@@ -79,13 +79,57 @@ def _make_topic(topic_id: int, reply_count: int) -> Topic:
     )
 
 
-def test_list_topics_prefers_most_recent_refresh_batch(tmp_path) -> None:
+def test_list_topics_uses_only_most_recent_successful_refresh_batch(tmp_path) -> None:
     store = Store(tmp_path / "linuxdo.sqlite")
 
-    store.upsert_topics([_make_topic(1111, reply_count=500)])
-    store._conn.execute("UPDATE topics SET updated_at = '2020-01-01 00:00:00'")
-    store._conn.commit()
-    store.upsert_topics([_make_topic(2222, reply_count=3), _make_topic(3333, reply_count=80)])
+    old_batch = store.start_refresh_batch("top", "daily")
+    store.upsert_topics([_make_topic(1111, reply_count=500)], batch_id=old_batch)
+    store.finish_refresh_batch(old_batch, complete=True)
+
+    failed_batch = store.start_refresh_batch("top", "daily")
+    store.upsert_topics([_make_topic(4444, reply_count=900)], batch_id=failed_batch)
+    store.finish_refresh_batch(failed_batch, complete=False, error="blocked")
+
+    new_batch = store.start_refresh_batch("top", "daily")
+    store.upsert_topics(
+        [_make_topic(2222, reply_count=3), _make_topic(3333, reply_count=80)],
+        batch_id=new_batch,
+    )
+    store.finish_refresh_batch(new_batch, complete=True)
 
     topics = store.list_topics(limit=3)
-    assert [topic.topic_id for topic in topics] == [3333, 2222, 1111]
+    assert [topic.topic_id for topic in topics] == [2222, 3333]
+
+
+def test_failed_refresh_does_not_expose_legacy_stale_topics(tmp_path) -> None:
+    store = Store(tmp_path / "linuxdo.sqlite")
+    store.upsert_topics([_make_topic(1111, reply_count=500)])
+    failed_batch = store.start_refresh_batch("top", "daily")
+    store.finish_refresh_batch(failed_batch, complete=False, error="blocked")
+
+    assert store.list_topics(limit=10) == []
+
+
+def test_store_persists_fetch_completeness(tmp_path) -> None:
+    store = Store(tmp_path / "linuxdo.sqlite")
+    post = _make_post("19684601", 1, "json")
+    result = FetchResult(
+        [post],
+        complete=False,
+        source="json",
+        error="pagination failed",
+        expected_count=3,
+    )
+
+    stale_post = _make_post("19684602", 2, "json")
+    store.upsert_posts([stale_post])
+    store.upsert_posts(result.posts)
+    store.record_fetch_result(2489984, result)
+
+    cached = store.get_fetch_result(2489984)
+    assert cached is not None
+    assert cached.posts == [post, stale_post]
+    assert cached.fetched_count == 1
+    assert cached.complete is False
+    assert cached.expected_count == 3
+    assert cached.error == "pagination failed"

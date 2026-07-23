@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
-import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
+from typing import Any
 
 from bs4 import BeautifulSoup
+from defusedxml.ElementTree import fromstring
 
 from .models import Post, Topic
 
@@ -12,7 +13,7 @@ DC_NS = "{http://purl.org/dc/elements/1.1/}"
 
 
 def parse_topic_list_feed(xml_text: str, source: str) -> list[Topic]:
-    root = ET.fromstring(xml_text)
+    root = fromstring(xml_text)
     topics: list[Topic] = []
     for item in root.findall("./channel/item"):
         link = _text(item, "link")
@@ -39,7 +40,7 @@ def parse_topic_list_feed(xml_text: str, source: str) -> list[Topic]:
 
 
 def parse_topic_feed(xml_text: str, topic_id: int) -> list[Post]:
-    root = ET.fromstring(xml_text)
+    root = fromstring(xml_text)
     posts: list[Post] = []
     for item in root.findall("./channel/item"):
         link = _text(item, "link")
@@ -84,7 +85,9 @@ def html_to_text(html: str) -> str:
         if link.get_text(strip=True) == "阅读完整话题":
             link.decompose()
     for small in soup.find_all("small"):
-        if re.search(r"\d+\s*个帖子\s*-\s*\d+\s*位参与者", small.get_text(" ", strip=True)):
+        if re.search(
+            r"\d+\s*个帖子\s*-\s*\d+\s*位参与者", small.get_text(" ", strip=True)
+        ):
             small.decompose()
     text = soup.get_text("\n", strip=True)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -99,7 +102,7 @@ def _extract_counts(html: str) -> tuple[int | None, int | None]:
     return int(match.group(1)), int(match.group(2))
 
 
-def _text(item: ET.Element, tag: str) -> str:
+def _text(item: Any, tag: str) -> str:
     found = item.find(tag)
     if found is None or found.text is None:
         return ""
