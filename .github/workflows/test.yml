@@ -25,9 +25,15 @@ jobs:
         run: |
           uv run bandit -q -r src
           uv run pip-audit
-      - name: Build distributions
+      - name: Build and verify distributions
         if: matrix.python-version == '3.13'
         run: |
           uv build
           tar -tzf dist/*.tar.gz > /tmp/sdist-files.txt
+          unzip -l dist/*.whl > /tmp/wheel-files.txt
+          unzip -p dist/*.whl '*/METADATA' > /tmp/wheel-metadata.txt
           grep -q '/skills/linuxdo-reader/SKILL.md$' /tmp/sdist-files.txt
+          grep -q '/LICENSE$' /tmp/sdist-files.txt
+          grep -q '\.dist-info/licenses/LICENSE$' /tmp/wheel-files.txt
+          grep -q '^License-Expression: MIT$' /tmp/wheel-metadata.txt
+          grep -q '^Classifier: License :: OSI Approved :: MIT License$' /tmp/wheel-metadata.txt

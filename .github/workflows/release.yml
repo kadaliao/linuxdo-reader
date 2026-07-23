@@ -53,11 +53,17 @@ jobs:
         run: |
           uv run bandit -q -r src
           uv run pip-audit
-      - name: Build distributions
+      - name: Build and verify distributions
         run: |
           uv build
           tar -tzf dist/*.tar.gz > /tmp/sdist-files.txt
+          unzip -l dist/*.whl > /tmp/wheel-files.txt
+          unzip -p dist/*.whl '*/METADATA' > /tmp/wheel-metadata.txt
           grep -q '/skills/linuxdo-reader/SKILL.md$' /tmp/sdist-files.txt
+          grep -q '/LICENSE$' /tmp/sdist-files.txt
+          grep -q '\.dist-info/licenses/LICENSE$' /tmp/wheel-files.txt
+          grep -q '^License-Expression: MIT$' /tmp/wheel-metadata.txt
+          grep -q '^Classifier: License :: OSI Approved :: MIT License$' /tmp/wheel-metadata.txt
       - name: Create GitHub release from verified SHA
         env:
           GH_TOKEN: ${{ github.token }}
